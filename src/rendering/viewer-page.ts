@@ -1,6 +1,7 @@
 import { escapeHtml } from "./html.js";
 import { renderViewerBrowserScript } from "./viewer-browser.js";
 import type { BusinessFlowStepDefinition } from "../contracts/map.js";
+import type { DiagramLayoutSpec } from "./viewer-layout.js";
 
 export type ViewerMode = "export" | "web";
 
@@ -37,6 +38,8 @@ export interface ViewerBusinessFlow {
   readonly transitionCount: number;
   readonly steps: readonly BusinessFlowStepDefinition[];
   readonly svg: string;
+  readonly textLayer: string;
+  readonly layout: DiagramLayoutSpec;
 }
 
 export interface ViewerMapView {
@@ -46,6 +49,8 @@ export interface ViewerMapView {
   readonly relationCount: number;
   readonly nodes: readonly ViewerNodeDetails[];
   readonly svg: string;
+  readonly textLayer: string;
+  readonly layout: DiagramLayoutSpec;
 }
 
 export interface ViewerProject {
@@ -56,8 +61,8 @@ export interface ViewerProject {
 }
 
 export interface ViewerProjectModel extends ViewerProjectReference {
-  readonly views: readonly Omit<ViewerMapView, "svg">[];
-  readonly flows: readonly Omit<ViewerBusinessFlow, "svg">[];
+  readonly views: readonly Omit<ViewerMapView, "svg" | "textLayer">[];
+  readonly flows: readonly Omit<ViewerBusinessFlow, "svg" | "textLayer">[];
 }
 
 export interface ViewerProjectPayload {
@@ -91,8 +96,8 @@ export function toViewerProjectPayload(project: ViewerProject): ViewerProjectPay
     project: {
       id: project.id,
       name: project.name,
-      views: project.views.map(({ svg: _svg, ...view }) => view),
-      flows: project.flows.map(({ svg: _svg, ...flow }) => flow),
+      views: project.views.map(({ svg: _svg, textLayer: _textLayer, ...view }) => view),
+      flows: project.flows.map(({ svg: _svg, textLayer: _textLayer, ...flow }) => flow),
     },
     markup: renderProjectMarkup(project),
   };
@@ -208,10 +213,12 @@ function renderProjectMarkup(project: ViewerProject): string {
     ...project.views.map((view) => `
       <div class="project-view" data-project-view data-view-type="relationships" data-project-id="${escapeHtml(project.id)}" data-map-view="${escapeHtml(view.id)}" hidden>
         ${view.svg}
+        <div class="diagram-text-layer">${view.textLayer}</div>
       </div>`),
     ...project.flows.map((flow) => `
       <div class="project-view" data-project-view data-view-type="flows" data-project-id="${escapeHtml(project.id)}" data-flow-view="${escapeHtml(flow.id)}" hidden>
         ${flow.svg}
+        <div class="diagram-text-layer">${flow.textLayer}</div>
       </div>`),
   ].join("");
 }
@@ -303,7 +310,7 @@ function viewerStyles(): string {
       display: flex;
       align-items: center;
     }
-    .viewer-toolbar__selectors { gap: 10px; min-width: 0; }
+    .viewer-toolbar__selectors { gap: 10px; min-width: 0; flex-wrap: wrap; }
     .viewer-toolbar__meta { justify-content: flex-end; gap: 12px; white-space: nowrap; }
     .field { display: flex; align-items: center; gap: 7px; min-width: 0; }
     .field[hidden] { display: none; }
@@ -329,6 +336,7 @@ function viewerStyles(): string {
     select:disabled { color: var(--muted); opacity: 0.72; }
     .view-switch {
       display: flex;
+      flex-shrink: 0;
       overflow: hidden;
       border: 1px solid rgba(56, 89, 103, 0.28);
       border-radius: 7px;
@@ -415,8 +423,6 @@ function viewerStyles(): string {
       overflow: hidden;
       cursor: grab;
       touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
     }
     .map-viewport[data-dragging="true"] { cursor: grabbing; }
     .project-view-host { position: absolute; inset: 0; }
@@ -461,14 +467,62 @@ function viewerStyles(): string {
     }
     .viewer-status p:last-child { margin: 0; color: #405052; line-height: 1.65; }
     .map-svg { display: block; width: 100%; height: 100%; }
+    .diagram-text-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+      pointer-events: none;
+    }
+    .diagram-card-text, .diagram-label {
+      position: absolute;
+      pointer-events: auto;
+      user-select: text;
+      -webkit-user-select: text;
+      cursor: text;
+      overflow-wrap: anywhere;
+    }
+    .diagram-card-text {
+      padding: 18px;
+      height: auto;
+    }
+    .diagram-card-text p, .diagram-card-text h3 { margin: 0; }
+    .diagram-card-text .node-card__kind, .diagram-card-text .flow-step__kind {
+      margin-bottom: 8px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .diagram-card-text .node-card__title, .diagram-card-text .flow-step__title {
+      color: var(--ink);
+      line-height: 22px;
+      margin-bottom: 12px;
+    }
+    .diagram-card-text .node-card__summary, .diagram-card-text .flow-step__summary {
+      color: #405052;
+      line-height: 17px;
+    }
+    .diagram-card-text--flow { text-align: center; }
+    .diagram-label {
+      transform: translate(-50%, -50%);
+      width: max-content;
+      max-width: 360px;
+      padding: 4px 10px;
+      border: 1px solid var(--relation);
+      border-radius: 12px;
+      background: var(--surface-strong);
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 16px;
+      text-align: center;
+      text-transform: uppercase;
+    }
+    .edge__label--containment { border-color: var(--containment); }
     .grid-line { stroke: #d9ddd3; stroke-width: 1; }
     .edge__path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .edge--containment .edge__path { stroke: var(--containment); stroke-width: 2.2; stroke-dasharray: 9 7; }
     .edge--directed-relation .edge__path { stroke: var(--relation); stroke-width: 2.4; }
-    .edge__label-surface { fill: var(--surface-strong); stroke-width: 1; }
-    .edge--containment .edge__label-surface { stroke: var(--containment); }
-    .edge--directed-relation .edge__label-surface { stroke: var(--relation); }
-    .edge__label { fill: var(--ink); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
+    .edge__label { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
     .node-card { cursor: pointer; }
     .node-card:focus { outline: none; }
     .node-card__surface {
@@ -487,9 +541,9 @@ function viewerStyles(): string {
     .node-card__kind-rule { fill: var(--accent); }
     .node-card--boundary .node-card__surface { fill: #f1f3ed; stroke-dasharray: 6 5; }
     .node-card--boundary .node-card__kind-rule { fill: var(--containment); }
-    .node-card__kind { fill: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: 0.12em; }
-    .node-card__title { fill: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 18px; font-weight: 650; }
-    .node-card__summary { fill: #405052; font-size: 13px; }
+    .node-card__kind { font-size: 10px; font-weight: 850; letter-spacing: 0.12em; }
+    .node-card__title { font-family: Georgia, "Times New Roman", serif; font-size: 18px; font-weight: 650; }
+    .node-card__summary { font-size: 13px; }
     .flow-transition__path {
       fill: none;
       stroke: var(--relation);
@@ -497,15 +551,14 @@ function viewerStyles(): string {
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    .flow-transition__label-surface { fill: var(--surface-strong); stroke: var(--relation); stroke-width: 1; }
-    .flow-transition__label { fill: var(--ink); font-size: 11px; font-weight: 850; letter-spacing: 0.05em; }
+    .flow-transition__label { font-size: 11px; font-weight: 850; letter-spacing: 0.05em; }
     .flow-step__surface { fill: var(--surface-strong); stroke: var(--line); stroke-width: 2; }
     .flow-step--action .flow-step__surface { stroke: var(--accent); }
     .flow-step--decision .flow-step__surface { fill: #fff8e8; stroke: var(--relation); stroke-width: 2.5; }
     .flow-step--outcome .flow-step__surface { fill: #eef3ee; stroke: var(--containment); }
-    .flow-step__kind { fill: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: 0.12em; }
-    .flow-step__title { fill: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 18px; font-weight: 650; }
-    .flow-step__summary { fill: #405052; font-size: 13px; }
+    .flow-step__kind { font-size: 10px; font-weight: 850; letter-spacing: 0.12em; }
+    .flow-step__title { font-family: Georgia, "Times New Roman", serif; font-size: 18px; font-weight: 650; }
+    .flow-step__summary { font-size: 13px; }
     .node-details {
       z-index: 2;
       grid-row: 2;

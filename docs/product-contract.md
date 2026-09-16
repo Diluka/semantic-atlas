@@ -79,6 +79,11 @@ Project and business-domain selection, relationship and flow views, pan, zoom,
 fit-to-view, navigation details, and related-flow links remain read-only. The
 visual surface does not become a second authoring or registration format.
 
+Diagram text is selectable ordinary HTML that supports whole-page translation.
+When a translator appends Chinese alongside English, cards grow to show the
+complete content and the diagram rearranges nodes, labels, and connecting lines.
+The original tracked map remains the single business-knowledge source.
+
 ### Post-task maintenance decision and reconciliation
 
 Every business-changing task records its map outcome and decides whether stable

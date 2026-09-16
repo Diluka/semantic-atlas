@@ -8,23 +8,20 @@ import type {
 import { BusinessGraph } from "../map/business-graph.js";
 import { escapeHtml, safeDomToken } from "./html.js";
 import type { ViewerBusinessFlow } from "./viewer-page.js";
+import { layoutDiagram, type DiagramLayoutSpec } from "./viewer-layout.js";
 
 const ACTION_WIDTH = 320;
-const DECISION_WIDTH = 380;
+const DECISION_WIDTH = 560;
 const OUTCOME_WIDTH = 320;
 const CARD_PADDING = 20;
 const TITLE_LINE_HEIGHT = 22;
 const SUMMARY_LINE_HEIGHT = 17;
-const CANVAS_PADDING = 42;
-const MINIMUM_CANVAS_WIDTH = 960;
 const graphemeSegmenter = new Intl.Segmenter("und", { granularity: "grapheme" });
 
 interface FlowStepPresentation {
   readonly step: BusinessFlowStepDefinition;
   readonly width: number;
   readonly height: number;
-  readonly titleLines: readonly string[];
-  readonly summaryLines: readonly string[];
 }
 
 interface PositionedFlowStep extends FlowStepPresentation {
@@ -43,13 +40,10 @@ interface RoutedFlowTransition {
 interface FlowLayout {
   readonly width: number;
   readonly height: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
   readonly steps: readonly PositionedFlowStep[];
   readonly transitions: readonly RoutedFlowTransition[];
-}
-
-interface RoutedEdge extends dagre.GraphEdge {
-  readonly x?: number;
-  readonly y?: number;
 }
 
 export class FlowProjector {
@@ -61,7 +55,8 @@ export class FlowProjector {
 
   private projectFlow(flow: BusinessFlow, projectId: string): ViewerBusinessFlow {
     const steps = flow.steps.map(presentStep);
-    const layout = layoutFlow(steps, flow.transitions);
+    const layoutSpec = createLayoutSpec(steps, flow.transitions);
+    const layout = layoutFlow(steps, flow.transitions, layoutSpec);
     const scenario = this.graph.requireNode(flow.scenario);
     return {
       id: flow.id,
@@ -75,12 +70,14 @@ export class FlowProjector {
       transitionCount: flow.transitions.length,
       steps: Object.freeze(flow.steps.map((step) => ({ ...step }))),
       svg: renderFlowSvg(flow, layout, `${projectId}-${flow.id}`),
+      textLayer: renderFlowTextLayer(layout),
+      layout: layoutSpec,
     };
   }
 }
 
 function presentStep(step: BusinessFlowStepDefinition): FlowStepPresentation {
-  const titleWidth = step.kind === "decision" ? 30 : 28;
+  const titleWidth = 28;
   const summaryWidth = step.kind === "decision" ? 38 : 40;
   const titleLines = wrapText(step.name, titleWidth);
   const summaryLines = wrapText(step.summary, summaryWidth);
@@ -88,83 +85,63 @@ function presentStep(step: BusinessFlowStepDefinition): FlowStepPresentation {
     + titleLines.length * TITLE_LINE_HEIGHT
     + summaryLines.length * SUMMARY_LINE_HEIGHT
     + CARD_PADDING;
-  const minimumHeight = step.kind === "decision" ? 176 : 128;
+  const minimumHeight = 128;
+  const textHeight = Math.max(minimumHeight, contentHeight);
   return {
     step,
     width: step.kind === "decision"
       ? DECISION_WIDTH
       : step.kind === "outcome" ? OUTCOME_WIDTH : ACTION_WIDTH,
-    height: Math.max(minimumHeight, contentHeight),
-    titleLines,
-    summaryLines,
+    // 菱形的中央半宽、半高矩形完整容纳可翻译正文。
+    height: step.kind === "decision" ? textHeight * 2 : textHeight,
+  };
+}
+
+function createLayoutSpec(
+  steps: readonly FlowStepPresentation[],
+  transitions: readonly BusinessFlowTransitionDefinition[],
+): DiagramLayoutSpec {
+  return {
+    direction: "TB",
+    nodes: steps.map((step) => ({
+      id: step.step.id,
+      kind: step.step.kind === "action" ? "card" : step.step.kind,
+      width: step.width,
+      height: step.height,
+    })),
+    edges: transitions.map((transition) => ({
+      id: transitionIdentity(transition),
+      from: transition.from,
+      to: transition.to,
+      width: transition.when ? labelWidth(transition.when) : 0,
+      height: transition.when ? 24 : 0,
+      minlen: 1,
+      weight: 3,
+    })),
   };
 }
 
 function layoutFlow(
   steps: readonly FlowStepPresentation[],
   transitions: readonly BusinessFlowTransitionDefinition[],
+  spec: DiagramLayoutSpec,
 ): FlowLayout {
-  const layoutGraph = new dagre.graphlib.Graph({ multigraph: true })
-    .setGraph({
-      rankdir: "TB",
-      ranker: "network-simplex",
-      acyclicer: "greedy",
-      nodesep: 92,
-      edgesep: 34,
-      ranksep: 112,
-      marginx: 28,
-      marginy: 28,
-    })
-    .setDefaultEdgeLabel(() => ({}));
-
-  for (const step of steps) {
-    layoutGraph.setNode(step.step.id, { width: step.width, height: step.height });
-  }
-  for (const transition of transitions) {
-    const id = transitionIdentity(transition);
-    const label = transition.when ?? "";
-    layoutGraph.setEdge(
-      transition.from,
-      transition.to,
-      {
-        width: label ? labelWidth(label) : 0,
-        height: label ? 24 : 0,
-        minlen: 1,
-        weight: 3,
-        labelpos: "c",
-      },
-      id,
-    );
-  }
-
-  dagre.layout(layoutGraph);
-  const graphLabel = layoutGraph.graph();
+  const layout = layoutDiagram(dagre, spec);
+  const positionedSteps = new Map(layout.nodes.map((node) => [node.id, node]));
+  const routedTransitions = new Map(layout.edges.map((edge) => [edge.id, edge]));
   return {
-    width: graphLabel.width ?? 0,
-    height: graphLabel.height ?? 0,
-    steps: steps.map((step) => {
-      const position = layoutGraph.node(step.step.id);
-      return { ...step, x: position.x, y: position.y };
-    }),
+    ...layout,
+    steps: steps.map((step) => ({ ...step, ...positionedSteps.get(step.step.id)! })),
     transitions: transitions.map((transition) => {
       const id = transitionIdentity(transition);
-      const routed = layoutGraph.edge(transition.from, transition.to, id) as RoutedEdge;
-      const fallback = routed.points[Math.floor(routed.points.length / 2)] ?? { x: 0, y: 0 };
-      return {
-        transition,
-        id,
-        route: routed.points,
-        labelX: routed.x ?? fallback.x,
-        labelY: routed.y ?? fallback.y,
-      };
+      const routed = routedTransitions.get(id)!;
+      return { transition, id, route: routed.points, labelX: routed.x, labelY: routed.y };
     }),
   };
 }
 
 function renderFlowSvg(flow: BusinessFlow, layout: FlowLayout, identity: string): string {
-  const canvasWidth = Math.max(MINIMUM_CANVAS_WIDTH, layout.width + CANVAS_PADDING * 2);
-  const canvasHeight = layout.height + CANVAS_PADDING * 2;
-  const offsetX = (canvasWidth - layout.width) / 2;
+  const { width: canvasWidth, height: canvasHeight, offsetX, offsetY } = layout;
   const domToken = safeDomToken(identity);
   const patternId = `flow-grid-${domToken}`;
   const markerId = `flow-arrow-${domToken}`;
@@ -180,7 +157,7 @@ function renderFlowSvg(flow: BusinessFlow, layout: FlowLayout, identity: string)
           </marker>
         </defs>
         <rect width="100%" height="100%" fill="url(#${patternId})" opacity="0.45" />
-        <g transform="translate(${formatNumber(offsetX)} ${formatNumber(CANVAS_PADDING)})">
+        <g data-layout-root transform="translate(${formatNumber(offsetX)} ${formatNumber(offsetY)})">
           ${layout.transitions.map((transition) => renderTransition(transition, markerId)).join("\n          ")}
           ${layout.steps.map(renderStep).join("\n          ")}
         </g>
@@ -188,49 +165,44 @@ function renderFlowSvg(flow: BusinessFlow, layout: FlowLayout, identity: string)
 }
 
 function renderTransition(transition: RoutedFlowTransition, markerId: string): string {
-  const label = transition.transition.when;
-  const labelMarkup = label
-    ? `<g transform="translate(${formatNumber(transition.labelX)} ${formatNumber(transition.labelY)})">
-              <rect class="flow-transition__label-surface" x="${formatNumber(-labelWidth(label) / 2)}" y="-12" width="${formatNumber(labelWidth(label))}" height="24" rx="12" />
-              <text class="flow-transition__label" text-anchor="middle" dominant-baseline="central">${escapeHtml(label.toUpperCase())}</text>
-            </g>`
-    : "";
-  return `<g class="flow-transition" data-flow-transition="${escapeHtml(transition.id)}">
+  return `<g class="flow-transition" data-flow-transition="${escapeHtml(transition.id)}" data-layout-edge="${escapeHtml(transition.id)}">
             <path class="flow-transition__path" d="${routePath(transition.route)}" marker-end="url(#${markerId})" />
-            ${labelMarkup}
           </g>`;
 }
 
 function renderStep(step: PositionedFlowStep): string {
   const left = step.x - step.width / 2;
   const top = step.y - step.height / 2;
-  const textX = step.x;
-  const titleY = step.y - ((step.titleLines.length - 1) * TITLE_LINE_HEIGHT
-    + step.summaryLines.length * SUMMARY_LINE_HEIGHT) / 2;
-  const summaryY = titleY + step.titleLines.length * TITLE_LINE_HEIGHT + 12;
   const surface = step.step.kind === "decision"
     ? `<path class="flow-step__surface" d="M ${formatNumber(step.x)} ${formatNumber(top)} L ${formatNumber(left + step.width)} ${formatNumber(step.y)} L ${formatNumber(step.x)} ${formatNumber(top + step.height)} L ${formatNumber(left)} ${formatNumber(step.y)} Z" />`
-    : `<rect class="flow-step__surface" x="${formatNumber(left)}" y="${formatNumber(top)}" width="${formatNumber(step.width)}" height="${formatNumber(step.height)}" rx="${step.step.kind === "outcome" ? formatNumber(step.height / 2) : "14"}" />`;
-  return `<g class="flow-step flow-step--${escapeHtml(step.step.kind)}" data-flow-step-id="${escapeHtml(step.step.id)}"${step.step.concept ? ` data-concept-id="${escapeHtml(step.step.concept)}"` : ""} role="group" aria-label="${escapeHtml(`${step.step.name}: ${step.step.summary}`)}">
+    : `<rect class="flow-step__surface" x="${formatNumber(left)}" y="${formatNumber(top)}" width="${formatNumber(step.width)}" height="${formatNumber(step.height)}" rx="${step.step.kind === "outcome" ? "32" : "14"}" />`;
+  return `<g class="flow-step flow-step--${escapeHtml(step.step.kind)}" data-flow-step-id="${escapeHtml(step.step.id)}" data-layout-node="${escapeHtml(step.step.id)}"${step.step.concept ? ` data-concept-id="${escapeHtml(step.step.concept)}"` : ""} role="group" aria-label="${escapeHtml(`${step.step.name}: ${step.step.summary}`)}">
             <title>${escapeHtml(`${step.step.name}: ${step.step.summary}`)}</title>
             ${surface}
-            <text class="flow-step__kind" x="${formatNumber(textX)}" y="${formatNumber(top + 27)}" text-anchor="middle">${escapeHtml(step.step.kind.toUpperCase())}</text>
-            ${renderTextLines(step.titleLines, textX, titleY, TITLE_LINE_HEIGHT, "flow-step__title")}
-            ${renderTextLines(step.summaryLines, textX, summaryY, SUMMARY_LINE_HEIGHT, "flow-step__summary")}
           </g>`;
 }
 
-function renderTextLines(
-  lines: readonly string[],
-  x: number,
-  y: number,
-  lineHeight: number,
-  className: string,
-): string {
-  const tspans = lines.map((line, index) =>
-    `<tspan x="${formatNumber(x)}" dy="${index === 0 ? "0" : formatNumber(lineHeight)}">${escapeHtml(line)}</tspan>`)
-    .join("");
-  return `<text class="${className}" x="${formatNumber(x)}" y="${formatNumber(y)}" text-anchor="middle">${tspans}</text>`;
+function renderFlowTextLayer(layout: FlowLayout): string {
+  const { offsetX, offsetY } = layout;
+  const cards = layout.steps.map((step) => renderStepText(step, offsetX, offsetY));
+  const labels = layout.transitions
+    .filter(({ transition }) => transition.when)
+    .map((transition) =>
+      `<span class="diagram-label flow-transition__label" data-layout-edge="${escapeHtml(transition.id)}" style="left:${formatNumber(transition.labelX + offsetX)}px;top:${formatNumber(transition.labelY + offsetY)}px">${escapeHtml(transition.transition.when!)}</span>`);
+  return [...cards, ...labels].join("\n");
+}
+
+function renderStepText(step: PositionedFlowStep, offsetX: number, offsetY: number): string {
+  const decision = step.step.kind === "decision";
+  const width = decision ? step.width / 2 : step.width;
+  const height = decision ? step.height / 2 : step.height;
+  const left = step.x - width / 2 + offsetX;
+  const top = step.y - height / 2 + offsetY;
+  return `<div class="diagram-card-text diagram-card-text--flow diagram-card-text--${step.step.kind}" data-flow-step-id="${escapeHtml(step.step.id)}" data-layout-node="${escapeHtml(step.step.id)}" style="left:${formatNumber(left)}px;top:${formatNumber(top)}px;width:${formatNumber(width)}px;min-height:${formatNumber(height)}px">
+              <p class="flow-step__kind">${escapeHtml(step.step.kind)}</p>
+              <h3 class="flow-step__title">${escapeHtml(step.step.name)}</h3>
+              <p class="flow-step__summary">${escapeHtml(step.step.summary)}</p>
+            </div>`;
 }
 
 function wrapText(value: string, maximumDisplayWidth: number): readonly string[] {

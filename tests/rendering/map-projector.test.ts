@@ -34,7 +34,27 @@ describe("MapProjector", () => {
     expect(first.content).toContain('aria-label="Zoom in"');
     expect(first.content).toContain('data-flow-view="commerce.orders.checkout-flow"');
     expect(first.content).toContain('data-flow-step-id="payment-authorized"');
-    expect(first.content).toContain("AUTHORIZED");
+    expect(first.content).toContain("authorized");
+  });
+
+  it("exposes complete graph and flow text as ordinary HTML for page translation", () => {
+    const graph = new BusinessGraph(validatedMap());
+    const project = new MapProjector(graph).viewerProject({ id: "repository", name: "Repository" });
+    const view = project.views[0]!;
+    const flow = project.flows[0]!;
+
+    expect(view.svg).not.toContain("<text");
+    expect(flow.svg).not.toContain("<text");
+    expect(view.textLayer).toContain('<h3 class="node-card__title">Orders &amp; returns</h3>');
+    expect(view.textLayer).toContain('<p class="node-card__summary">Keeps orders &lt;reliable&gt;.</p>');
+    expect(view.textLayer).toContain('data-node-id="commerce.orders"');
+    expect(view.textLayer).toContain('>contains</span>');
+    expect(flow.textLayer).toContain('<h3 class="flow-step__title">Is payment authorized?</h3>');
+    expect(flow.textLayer).toContain('<p class="flow-step__summary">Only authorized payment may create an order.</p>');
+    expect(flow.textLayer).toContain('>authorized</span>');
+    expect(flow.textLayer).not.toContain("<svg");
+    expect(view.textLayer).not.toContain("<svg");
+    expect(view.textLayer).not.toContain("<script>alert");
   });
 
   it("links relationship concepts to flows that reuse their business identities", () => {
@@ -57,6 +77,34 @@ describe("MapProjector", () => {
       transitionCount: 3,
     }]);
     expect(project.flows[0]?.svg).toContain('class="flow-step flow-step--decision"');
+  });
+
+  it("keeps translated cards intrinsically sized and connects text to reflowable geometry", () => {
+    const graph = new BusinessGraph(validatedMap());
+    const project = new MapProjector(graph).viewerProject({ id: "repository", name: "Repository" });
+    const view = project.views[0]!;
+    const flow = project.flows[0]!;
+
+    for (const diagram of [view, flow]) {
+      expect(diagram.svg).toContain("data-layout-root");
+      expect(diagram.textLayer).not.toMatch(/(?:^|;)height:/u);
+      for (const node of diagram.layout.nodes) {
+        expect(diagram.svg).toContain(`data-layout-node="${node.id}"`);
+        expect(diagram.textLayer).toContain(`data-layout-node="${node.id}"`);
+      }
+      for (const edge of diagram.layout.edges) {
+        expect(diagram.svg).toContain(`data-layout-edge="${edge.id}"`);
+        if (edge.width > 0) {
+          expect(diagram.textLayer).toContain(`data-layout-edge="${edge.id}"`);
+        }
+      }
+    }
+    expect(view.layout.direction).toBe("LR");
+    expect(flow.layout.direction).toBe("TB");
+    expect(view.layout.edges[0]).toMatchObject({ from: "commerce", to: "commerce.orders" });
+    expect(flow.layout.nodes.find(({ id }) => id === "payment-authorized")?.kind).toBe("decision");
+    expect(flow.layout.nodes.find(({ id }) => id === "receive-order")?.kind).toBe("card");
+    expect(flow.layout.nodes.find(({ id }) => id === "order-created")?.kind).toBe("outcome");
   });
 
   it("keeps navigation anchors in on-demand details rather than graph cards", () => {

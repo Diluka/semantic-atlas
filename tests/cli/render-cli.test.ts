@@ -112,7 +112,7 @@ describe("semantic-atlas render", () => {
     expect(firstProjection).not.toContain("Business relationships, made visible.");
   });
 
-  it("wraps wide-character labels within the card and includes every line in its height", async () => {
+  it("preserves complete Chinese text for browser wrapping and translation", async () => {
     const nodeId = "commerce.cross-border-fulfillment";
     const repositoryRoot = await trackedRepository({
       "commerce.yaml": mapDocument(
@@ -136,12 +136,11 @@ describe("semantic-atlas render", () => {
     expect(result.exitCode).toBe(0);
     const projection = await readFile(outputPath, "utf8");
     const nodeMarkup = extractNodeMarkup(projection, nodeId);
-    const titleMarkup = extractTextMarkup(nodeMarkup, "node-card__title");
-    const summaryMarkup = extractTextMarkup(nodeMarkup, "node-card__summary");
     const cardHeight = extractCardHeight(nodeMarkup);
 
-    expect(titleMarkup.match(/<tspan /gu)).toHaveLength(2);
-    expect(summaryMarkup.match(/<tspan /gu)).toHaveLength(2);
+    expect(projection).toContain('<h3 class="node-card__title">跨境订单履约协作与售后退款处理业务能力中心平台服务</h3>');
+    expect(projection).toContain('<p class="node-card__summary">协调跨境订单履约协作与售后退款处理业务能力中心平台服务的完整业务结果。</p>');
+    expect(nodeMarkup).not.toContain("<text");
     expect(cardHeight).toBeGreaterThan(124);
   });
 
@@ -240,15 +239,6 @@ function extractNodeMarkup(projection: string, nodeId: string): string {
     "u",
   ));
   expect(match, `Expected rendered node ${nodeId}`).not.toBeNull();
-  return match?.[0] ?? "";
-}
-
-function extractTextMarkup(nodeMarkup: string, className: string): string {
-  const match = nodeMarkup.match(new RegExp(
-    `<text class="${className}"[^>]*>[\\s\\S]*?</text>`,
-    "u",
-  ));
-  expect(match, `Expected rendered text ${className}`).not.toBeNull();
   return match?.[0] ?? "";
 }
 

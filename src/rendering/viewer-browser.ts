@@ -3,6 +3,7 @@ import {
   fitViewBox,
   MAP_SCALE_LIMITS,
   mapPointFromViewport,
+  mapPointToViewport,
   panViewBox,
   viewportScale,
   zoomViewBoxAt,
@@ -11,6 +12,16 @@ import {
   type MapViewport,
 } from "./map-camera.js";
 import { createLatestProjectLoader } from "./latest-project-loader.js";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { layoutDiagram, type DiagramLayoutSpec } from "./viewer-layout.js";
+import { createDiagramLayoutController } from "./viewer-diagram.js";
+import type dagre from "@dagrejs/dagre";
+
+const require = createRequire(import.meta.url);
+const dagreLicense = readFileSync(require.resolve("@dagrejs/dagre/LICENSE"), "utf8");
+const dagreBrowserScript = `/*! @dagrejs/dagre and @dagrejs/graphlib (MIT)\n${dagreLicense}*/\n`
+  + readFileSync(require.resolve("@dagrejs/dagre/dist/dagre.min.js"), "utf8");
 
 interface ViewerNavigationAnchorModel {
   readonly kind: string;
@@ -29,6 +40,7 @@ interface ViewerNodeModel {
 }
 
 interface ViewerFlowModel {
+  readonly layout: DiagramLayoutSpec;
   readonly id: string;
   readonly name: string;
   readonly summary: string;
@@ -41,6 +53,7 @@ interface ViewerFlowModel {
 }
 
 interface ViewerMapModel {
+  readonly layout: DiagramLayoutSpec;
   readonly id: string;
   readonly name: string;
   readonly nodeCount: number;
@@ -82,21 +95,29 @@ interface WebProjectEnvelope {
 
 export function renderViewerBrowserScript(): string {
   return [
+    dagreBrowserScript,
     `const MAP_SCALE_LIMITS = ${JSON.stringify(MAP_SCALE_LIMITS)};`,
     clamp.toString(),
     viewportScale.toString(),
     fitViewBox.toString(),
     zoomViewBoxAt.toString(),
     mapPointFromViewport.toString(),
+    mapPointToViewport.toString(),
     panViewBox.toString(),
     createLatestProjectLoader.toString(),
-    "globalThis.__semanticAtlasCamera = { fitViewBox, zoomViewBoxAt, mapPointFromViewport, panViewBox };",
+    layoutDiagram.toString(),
+    createDiagramLayoutController.toString(),
+    "globalThis.__semanticAtlasCamera = { fitViewBox, zoomViewBoxAt, mapPointFromViewport, mapPointToViewport, viewportScale, panViewBox };",
     "globalThis.__semanticAtlasCreateLatestProjectLoader = createLatestProjectLoader;",
+    "globalThis.__semanticAtlasLayoutDiagram = layoutDiagram;",
+    "globalThis.__semanticAtlasCreateDiagramLayoutController = createDiagramLayoutController;",
     `(${viewerBrowserEntry.toString()})();`,
   ].join("\n");
 }
 
 interface BrowserCameraApi {
+  viewportScale(viewBox: MapViewBox, viewport: MapViewport): number;
+  mapPointToViewport(point: MapPoint, viewBox: MapViewBox, viewport: MapViewport): MapPoint;
   fitViewBox(bounds: MapViewBox): MapViewBox;
   zoomViewBoxAt(
     current: MapViewBox,
@@ -126,6 +147,9 @@ type ViewerViewType = "relationships" | "flows";
 
 function viewerBrowserEntry(): void {
   const browserGlobal = globalThis as typeof globalThis & {
+    readonly dagre: typeof dagre;
+    readonly __semanticAtlasLayoutDiagram: typeof layoutDiagram;
+    readonly __semanticAtlasCreateDiagramLayoutController: typeof createDiagramLayoutController;
     readonly __semanticAtlasCamera: BrowserCameraApi;
     readonly __semanticAtlasCreateLatestProjectLoader: typeof createLatestProjectLoader;
   };
@@ -226,6 +250,13 @@ function viewerBrowserEntry(): void {
   const applyCamera = (svg: SVGSVGElement, camera: MapViewBox): void => {
     cameras.set(cameraKey(), camera);
     svg.setAttribute("viewBox", `${camera.x} ${camera.y} ${camera.width} ${camera.height}`);
+    const textLayer = svg.parentElement?.querySelector<HTMLElement>(".diagram-text-layer");
+    if (!textLayer) return;
+    const bounds = svg.getBoundingClientRect();
+    const viewportSize = { width: bounds.width, height: bounds.height };
+    const scale = cameraApi.viewportScale(camera, viewportSize);
+    const origin = cameraApi.mapPointToViewport({ x: 0, y: 0 }, camera, viewportSize);
+    textLayer.style.transform = `translate(${origin.x}px, ${origin.y}px) scale(${scale})`;
   };
   const ensureCamera = (svg: SVGSVGElement): MapViewBox => {
     const stored = cameras.get(cameraKey());
@@ -234,6 +265,17 @@ function viewerBrowserEntry(): void {
     cameras.set(cameraKey(), fitted);
     return fitted;
   };
+
+  const diagramLayout = browserGlobal.__semanticAtlasCreateDiagramLayoutController(
+    browserGlobal.dagre,
+    browserGlobal.__semanticAtlasLayoutDiagram,
+    (svg, previousBounds) => {
+      const current = cameras.get(cameraKey());
+      const wasFitted = !current || (current.x === 0 && current.y === 0
+        && current.width === previousBounds.width && current.height === previousBounds.height);
+      applyCamera(svg, wasFitted ? cameraApi.fitViewBox(mapBounds(svg)) : current);
+    },
+  );
 
   const closeNodeDetails = (restoreFocus = false): void => {
     const previousNode = activeNodeElement;
@@ -258,6 +300,7 @@ function viewerBrowserEntry(): void {
   };
 
   const clearProject = (): void => {
+    diagramLayout.disconnect();
     closeNodeDetails();
     activeProject = undefined;
     activeViewId = undefined;
@@ -338,7 +381,7 @@ function viewerBrowserEntry(): void {
     return button;
   };
 
-  const openNodeDetails = (nodeElement: SVGGElement): void => {
+  const openNodeDetails = (nodeElement: SVGGElement, focusDetails = true): void => {
     const nodeId = nodeElement.dataset.nodeId;
     const node = currentView()?.nodes.find(({ id }) => id === nodeId);
     if (!node) return;
@@ -356,7 +399,7 @@ function viewerBrowserEntry(): void {
     detailsAnchorList.replaceChildren(...node.anchors.map(createAnchorElement));
     detailsAnchors.hidden = node.anchors.length === 0;
     nodeDetails.hidden = false;
-    detailsClose.focus({ preventScroll: true });
+    if (focusDetails) detailsClose.focus({ preventScroll: true });
   };
 
   const populateDomains = (): void => {
@@ -415,7 +458,13 @@ function viewerBrowserEntry(): void {
         ? `${flow.stepCount} steps / ${flow.transitionCount} transitions / ${flow.scenario.name}`
         : "No business flows";
     const svg = activeSvg();
-    if (svg) applyCamera(svg, ensureCamera(svg));
+    const definition = activeViewType === "relationships" ? view : flow;
+    if (svg && definition) {
+      applyCamera(svg, ensureCamera(svg));
+      diagramLayout.observe(svg.parentElement!, definition.layout);
+    } else {
+      diagramLayout.disconnect();
+    }
   };
 
   const enterReady = (payload: ViewerProjectPayloadModel, projectId: string): void => {
@@ -493,6 +542,11 @@ function viewerBrowserEntry(): void {
     if (svg) applyCamera(svg, cameraApi.fitViewBox(mapBounds(svg)));
   };
 
+  new ResizeObserver(() => {
+    const svg = activeSvg();
+    if (svg) applyCamera(svg, ensureCamera(svg));
+  }).observe(viewport);
+
   projectSelect.addEventListener("change", activateProject);
   domainSelect.addEventListener("change", () => {
     closeNodeDetails();
@@ -545,6 +599,9 @@ function viewerBrowserEntry(): void {
 
   viewport.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || !activeSvg()) return;
+    // 文字使用浏览器原生选区；只有图形和空白处接管为画布拖动。
+    if (event.target instanceof Element
+      && event.target.closest(".diagram-card-text, .diagram-label")) return;
     event.preventDefault();
     document.getSelection()?.removeAllRanges();
     const nodeElement = nodeElementFromTarget(event.target);
@@ -597,6 +654,16 @@ function viewerBrowserEntry(): void {
   };
   viewport.addEventListener("pointerup", (event) => finishDrag(event, true));
   viewport.addEventListener("pointercancel", (event) => finishDrag(event, false));
+  viewport.addEventListener("click", (event) => {
+    if (document.getSelection()?.isCollapsed === false) return;
+    const text = event.target instanceof Element
+      ? event.target.closest<HTMLElement>(".diagram-card-text[data-node-id]")
+      : null;
+    if (!text) return;
+    const nodeElement = Array.from(activeSvg()?.querySelectorAll<SVGGElement>(".node-card") ?? [])
+      .find((node) => node.dataset.nodeId === text.dataset.nodeId);
+    if (nodeElement) openNodeDetails(nodeElement, false);
+  });
   viewport.addEventListener("keydown", (event) => {
     const nodeElement = nodeElementFromTarget(event.target);
     if (!nodeElement || (event.key !== "Enter" && event.key !== " ")) return;

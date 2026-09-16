@@ -17,11 +17,13 @@ describe("ViewerPage", () => {
     expect(html).toContain(">repository (2)</option>");
   });
 
-  it("prevents map text selection and provides an on-demand detail surface", () => {
+  it("exposes selectable HTML text beside SVG and retains on-demand details", () => {
     const html = renderViewerPage([viewerProject("project", "repository")]);
 
-    expect(html).toMatch(/\.map-viewport\s*\{[^}]*user-select:\s*none/gu);
-    expect(html).toContain("-webkit-user-select: none");
+    expect(html).not.toMatch(/\.map-viewport\s*\{[^}]*user-select:\s*none/gu);
+    expect(html).toContain("-webkit-user-select: text");
+    expect(html).toContain('</svg>\n        <div class="diagram-text-layer">');
+    expect(html).toContain('<p>Selectable business text</p>');
     expect(html).toContain('id="node-details"');
     expect(html).toContain('aria-label="Close concept details"');
     expect(html).toContain('id="node-details-flows"');
@@ -43,6 +45,8 @@ describe("ViewerPage", () => {
         transitionCount: 0,
         steps: [],
         svg: '<svg class="map-svg"></svg>',
+        textLayer: "",
+        layout: { direction: "TB", nodes: [], edges: [] },
       }],
     }]);
 
@@ -90,6 +94,8 @@ function viewerProject(id: string, name: string): ViewerProject {
       relationCount: 0,
       nodes: [],
       svg: '<svg class="map-svg"></svg>',
+      textLayer: "<p>Selectable business text</p>",
+      layout: { direction: "LR", nodes: [], edges: [] },
     }],
     flows: [],
   };

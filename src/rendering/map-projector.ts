@@ -8,6 +8,7 @@ import type {
 import { BusinessGraph } from "../map/business-graph.js";
 import { escapeHtml, safeDomToken } from "./html.js";
 import { FlowProjector } from "./flow-projector.js";
+import { layoutDiagram, type DiagramLayoutSpec } from "./viewer-layout.js";
 import {
   renderViewerPage,
   type ViewerMapView,
@@ -19,8 +20,6 @@ const CARD_WIDTH = 320;
 const CARD_PADDING = 18;
 const LINE_HEIGHT = 17;
 const TITLE_LINE_HEIGHT = 22;
-const CANVAS_PADDING = 28;
-const MINIMUM_CANVAS_WIDTH = 960;
 const graphemeSegmenter = new Intl.Segmenter("und", { granularity: "grapheme" });
 
 interface NodePresentation {
@@ -28,8 +27,6 @@ interface NodePresentation {
   readonly boundary: boolean;
   readonly width: number;
   readonly height: number;
-  readonly titleLines: readonly string[];
-  readonly summaryLines: readonly string[];
 }
 
 interface RelationPresentation {
@@ -55,13 +52,10 @@ interface PositionedNode extends NodePresentation {
 interface ProjectionLayout {
   readonly width: number;
   readonly height: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
   readonly nodes: readonly PositionedNode[];
   readonly relations: readonly RoutedRelation[];
-}
-
-interface RoutedEdge extends dagre.GraphEdge {
-  readonly x?: number;
-  readonly y?: number;
 }
 
 export class MapProjector {
@@ -111,7 +105,8 @@ export class MapProjector {
     const relations = selection.relations
       .map(presentRelation)
       .sort(comparePresentedRelations);
-    const layout = layoutProjection(nodes, relations);
+    const layoutSpec = createLayoutSpec(nodes, relations);
+    const layout = layoutProjection(nodes, relations, layoutSpec);
 
     return {
       id: selection.id,
@@ -123,6 +118,8 @@ export class MapProjector {
         this.graph.flowsRelatedTo(node.node.id).map(({ id }) => id),
       ))),
       svg: renderMapSvg(layout, `${projectId}-${selection.id}`),
+      textLayer: renderMapTextLayer(layout),
+      layout: layoutSpec,
     };
   }
 }
@@ -183,8 +180,6 @@ function presentNode(node: BusinessNode, boundary: boolean): NodePresentation {
     boundary,
     width: CARD_WIDTH,
     height: Math.max(124, contentHeight),
-    titleLines,
-    summaryLines,
   };
 }
 
@@ -215,84 +210,50 @@ function presentRelation(relation: BusinessRelation): RelationPresentation {
   };
 }
 
+function createLayoutSpec(
+  nodes: readonly NodePresentation[],
+  relations: readonly RelationPresentation[],
+): DiagramLayoutSpec {
+  return {
+    direction: "LR",
+    nodes: nodes.map((node) => ({
+      id: node.node.id,
+      kind: "card",
+      width: node.width,
+      height: node.height,
+    })),
+    edges: relations.map((relation) => ({
+      id: relation.id,
+      from: relation.layoutFrom,
+      to: relation.layoutTo,
+      width: relationLabelWidth(relation.label),
+      height: 24,
+      minlen: relation.channel === "containment" ? 1 : 2,
+      weight: relation.channel === "containment" ? 8 : 2,
+    })),
+  };
+}
+
 function layoutProjection(
   nodes: readonly NodePresentation[],
   relations: readonly RelationPresentation[],
+  spec: DiagramLayoutSpec,
 ): ProjectionLayout {
-  const layoutGraph = new dagre.graphlib.Graph({ multigraph: true })
-    .setGraph({
-      rankdir: "LR",
-      ranker: "network-simplex",
-      acyclicer: "greedy",
-      nodesep: 50,
-      edgesep: 30,
-      ranksep: 118,
-      marginx: 24,
-      marginy: 24,
-    })
-    .setDefaultEdgeLabel(() => ({}));
-
-  for (const node of nodes) {
-    layoutGraph.setNode(node.node.id, {
-      width: node.width,
-      height: node.height,
-    });
-  }
-
-  for (const relation of relations) {
-    layoutGraph.setEdge(
-      relation.layoutFrom,
-      relation.layoutTo,
-      {
-        width: relationLabelWidth(relation.label),
-        height: 24,
-        minlen: relation.channel === "containment" ? 1 : 2,
-        weight: relation.channel === "containment" ? 8 : 2,
-        labelpos: "c",
-      },
-      relation.id,
-    );
-  }
-
-  dagre.layout(layoutGraph);
-  const graphLabel = layoutGraph.graph();
-
+  const layout = layoutDiagram(dagre, spec);
+  const positionedNodes = new Map(layout.nodes.map((node) => [node.id, node]));
+  const routedRelations = new Map(layout.edges.map((edge) => [edge.id, edge]));
   return {
-    width: graphLabel.width ?? 0,
-    height: graphLabel.height ?? 0,
-    nodes: nodes.map((node) => {
-      const positioned = layoutGraph.node(node.node.id);
-      return {
-        ...node,
-        x: positioned.x,
-        y: positioned.y,
-      };
-    }),
+    ...layout,
+    nodes: nodes.map((node) => ({ ...node, ...positionedNodes.get(node.node.id)! })),
     relations: relations.map((relation) => {
-      const routed = layoutGraph.edge(
-        relation.layoutFrom,
-        relation.layoutTo,
-        relation.id,
-      ) as RoutedEdge;
-      const fallbackLabel = middlePoint(routed.points);
-      return {
-        ...relation,
-        route: routed.points,
-        labelX: routed.x ?? fallbackLabel.x,
-        labelY: routed.y ?? fallbackLabel.y,
-      };
+      const routed = routedRelations.get(relation.id)!;
+      return { ...relation, route: routed.points, labelX: routed.x, labelY: routed.y };
     }),
   };
 }
 
 function renderMapSvg(layout: ProjectionLayout, identity: string): string {
-  const canvasWidth = Math.max(
-    MINIMUM_CANVAS_WIDTH,
-    layout.width + CANVAS_PADDING * 2,
-  );
-  const canvasHeight = layout.height + CANVAS_PADDING * 2;
-  const graphOffsetX = (canvasWidth - layout.width) / 2;
-  const graphOffsetY = CANVAS_PADDING;
+  const { width: canvasWidth, height: canvasHeight, offsetX, offsetY } = layout;
   const domToken = safeDomToken(identity);
   const patternId = `diagram-grid-${domToken}`;
   const markerId = `relation-arrow-${domToken}`;
@@ -309,7 +270,7 @@ function renderMapSvg(layout: ProjectionLayout, identity: string): string {
           </marker>
         </defs>
         <rect width="100%" height="100%" fill="url(#${patternId})" opacity="0.45" />
-        <g transform="translate(${formatNumber(graphOffsetX)} ${formatNumber(graphOffsetY)})">
+        <g data-layout-root transform="translate(${formatNumber(offsetX)} ${formatNumber(offsetY)})">
           ${renderRelations(layout.relations, "containment", layout.nodes, markerId)}
           ${renderRelations(layout.relations, "directed-relation", layout.nodes, markerId)}
           ${layout.nodes.map((node) => renderNode(node, domToken)).join("\n          ")}
@@ -335,7 +296,6 @@ function renderRelation(
   nodeById: ReadonlyMap<string, BusinessNode>,
   markerId: string,
 ): string {
-  const labelWidth = relationLabelWidth(relation.label);
   const source = nodeById.get(relation.relation.from);
   const target = nodeById.get(relation.relation.to);
   const ariaLabel = relation.channel === "containment"
@@ -345,56 +305,45 @@ function renderRelation(
     ? ` marker-end="url(#${markerId})"`
     : "";
 
-  return `<g class="edge edge--${relation.channel}" data-channel="${relation.channel}" data-relation-id="${escapeHtml(relation.id)}" data-relation-type="${escapeHtml(relation.relation.type)}" role="group" aria-label="${escapeHtml(ariaLabel)}">
+  return `<g class="edge edge--${relation.channel}" data-channel="${relation.channel}" data-relation-id="${escapeHtml(relation.id)}" data-layout-edge="${escapeHtml(relation.id)}" data-relation-type="${escapeHtml(relation.relation.type)}" role="group" aria-label="${escapeHtml(ariaLabel)}">
             <title>${escapeHtml(`${ariaLabel}: ${relation.relation.summary}`)}</title>
             <path class="edge__path" d="${routePath(relation.route)}"${marker} />
-            <g transform="translate(${formatNumber(relation.labelX)} ${formatNumber(relation.labelY)})">
-              <rect class="edge__label-surface" x="${formatNumber(-labelWidth / 2)}" y="-12" width="${formatNumber(labelWidth)}" height="24" rx="12" />
-              <text class="edge__label" text-anchor="middle" dominant-baseline="central">${escapeHtml(relation.label.toUpperCase())}</text>
-            </g>
           </g>`;
 }
 
 function renderNode(node: PositionedNode, domToken: string): string {
   const left = node.x - node.width / 2;
   const top = node.y - node.height / 2;
-  const textX = left + CARD_PADDING;
-  const titleY = top + 50;
-  const summaryY = titleY + node.titleLines.length * TITLE_LINE_HEIGHT + 7;
   const boundaryClass = node.boundary ? " node-card--boundary" : "";
-  return `<g class="node-card node-card--${escapeHtml(node.node.kind)}${boundaryClass}" id="node-${domToken}-${safeDomToken(node.node.id)}" data-node-id="${escapeHtml(node.node.id)}" data-node-kind="${escapeHtml(node.node.kind)}" data-boundary="${node.boundary}" role="button" tabindex="0" aria-controls="node-details" aria-expanded="false" aria-label="${escapeHtml(`${node.node.name}: ${node.node.summary}`)}">
+  return `<g class="node-card node-card--${escapeHtml(node.node.kind)}${boundaryClass}" id="node-${domToken}-${safeDomToken(node.node.id)}" data-node-id="${escapeHtml(node.node.id)}" data-layout-node="${escapeHtml(node.node.id)}" data-node-kind="${escapeHtml(node.node.kind)}" data-boundary="${node.boundary}" role="button" tabindex="0" aria-controls="node-details" aria-expanded="false" aria-label="${escapeHtml(`${node.node.name}: ${node.node.summary}`)}">
             <title>${escapeHtml(`${node.node.name}: ${node.node.summary}`)}</title>
             <rect class="node-card__surface" x="${formatNumber(left)}" y="${formatNumber(top)}" width="${formatNumber(node.width)}" height="${formatNumber(node.height)}" rx="14" />
             <rect class="node-card__kind-rule" x="${formatNumber(left)}" y="${formatNumber(top)}" width="7" height="${formatNumber(node.height)}" rx="3.5" />
-            <text class="node-card__kind" x="${formatNumber(textX)}" y="${formatNumber(top + 24)}">${escapeHtml(node.node.kind.toUpperCase())}</text>
-            ${renderTextLines(node.titleLines, textX, titleY, TITLE_LINE_HEIGHT, "node-card__title")}
-            ${renderTextLines(node.summaryLines, textX, summaryY, LINE_HEIGHT, "node-card__summary")}
           </g>`;
 }
 
-function renderTextLines(
-  lines: readonly string[],
-  x: number,
-  y: number,
-  lineHeight: number,
-  className: string,
-): string {
-  const tspans = lines.map((line, index) =>
-    `<tspan x="${formatNumber(x)}" dy="${index === 0 ? "0" : formatNumber(lineHeight)}">${escapeHtml(line)}</tspan>`)
-    .join("");
-  return `<text class="${className}" x="${formatNumber(x)}" y="${formatNumber(y)}">${tspans}</text>`;
+function renderMapTextLayer(layout: ProjectionLayout): string {
+  const { offsetX, offsetY } = layout;
+  const cards = layout.nodes.map((node) => renderNodeText(node, offsetX, offsetY));
+  const labels = layout.relations.map((relation) =>
+    `<span class="diagram-label edge__label edge__label--${relation.channel}" data-layout-edge="${escapeHtml(relation.id)}" style="left:${formatNumber(relation.labelX + offsetX)}px;top:${formatNumber(relation.labelY + offsetY)}px">${escapeHtml(relation.label)}</span>`);
+  return [...cards, ...labels].join("\n");
+}
+
+function renderNodeText(node: PositionedNode, offsetX: number, offsetY: number): string {
+  const left = node.x - node.width / 2 + offsetX;
+  const top = node.y - node.height / 2 + offsetY;
+  return `<div class="diagram-card-text diagram-card-text--relationship" data-node-id="${escapeHtml(node.node.id)}" data-layout-node="${escapeHtml(node.node.id)}" style="left:${formatNumber(left)}px;top:${formatNumber(top)}px;width:${formatNumber(node.width)}px;min-height:${formatNumber(node.height)}px">
+              <p class="node-card__kind">${escapeHtml(node.node.kind)}</p>
+              <h3 class="node-card__title">${escapeHtml(node.node.name)}</h3>
+              <p class="node-card__summary">${escapeHtml(node.node.summary)}</p>
+            </div>`;
 }
 
 function routePath(points: readonly dagre.GraphEdge["points"][number][]): string {
   return points.map((point, index) =>
     `${index === 0 ? "M" : "L"} ${formatNumber(point.x)} ${formatNumber(point.y)}`)
     .join(" ");
-}
-
-function middlePoint(
-  points: readonly dagre.GraphEdge["points"][number][],
-): dagre.GraphEdge["points"][number] {
-  return points[Math.floor(points.length / 2)] ?? { x: 0, y: 0 };
 }
 
 function wrapText(value: string, maximumDisplayWidth: number): readonly string[] {

@@ -71,6 +71,12 @@ IDs use lowercase dot-separated business vocabulary, for example
 `commerce.orders.place-order`. They remain stable when implementation paths or
 semantic parents change. Containment lives in explicit `part_of` relations.
 
+Human-facing names, summaries, and branch labels accept Chinese or English.
+Use the author's working language for the single retained description. A Chinese
+node name can keep an English stable ID and English search terms in `aliases`;
+both Chinese names and English aliases participate in the lookup rules below.
+Browser translation changes presentation only and does not write another map.
+
 Supported node kinds are:
 
 ```text

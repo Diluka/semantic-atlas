@@ -37,7 +37,7 @@ export function zoomViewBoxAt(
     MAP_SCALE_LIMITS.maximum,
   );
   const targetWidth = bounds.width / targetScale;
-  const targetHeight = bounds.height / targetScale;
+  const targetHeight = current.height * targetWidth / current.width;
   const anchorRatioX = (anchor.x - current.x) / current.width;
   const anchorRatioY = (anchor.y - current.y) / current.height;
 
@@ -84,6 +84,18 @@ export function viewportScale(viewBox: MapViewBox, viewport: MapViewport): numbe
     viewport.width / viewBox.width,
     viewport.height / viewBox.height,
   );
+}
+
+export function mapPointToViewport(
+  point: MapPoint,
+  viewBox: MapViewBox,
+  viewport: MapViewport,
+): MapPoint {
+  const scale = viewportScale(viewBox, viewport);
+  return {
+    x: (point.x - viewBox.x) * scale + (viewport.width - viewBox.width * scale) / 2,
+    y: (point.y - viewBox.y) * scale + (viewport.height - viewBox.height * scale) / 2,
+  };
 }
 
 export function clamp(value: number, minimum: number, maximum: number): number {

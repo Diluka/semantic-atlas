@@ -136,26 +136,45 @@ identities for repeatable layout and inspection.
 
 ### FlowProjector
 
-Builds one deterministic top-to-bottom SVG per business flow. Dagre owns step
+Builds one deterministic top-to-bottom diagram per business flow. Dagre owns step
 placement and transition routing; action, decision, and outcome steps preserve
 distinct visual semantics, while labeled decision branches remain visible on
 their transitions. The projector reads normalized flow meaning and owns no
 query or maintenance decisions.
+
+### Diagram Layout
+
+Relationship and flow projectors share `layoutDiagram` for both initial
+server-side size estimates and browser-measured text dimensions. SVG owns
+shapes and routed lines; an ordinary HTML sibling layer owns complete names,
+summaries, kinds, and branch labels so page translators can read full sentences.
+The same layout positions both layers and connects decision edges to the actual
+diamond boundary.
+
+The browser observes card and label sizes. Appending a translation, changing
+fonts, or restoring original text reflows the affected diagram without replacing
+its text DOM. Nodes grow with their content and Dagre reserves the measured
+label space. Translation remains browser presentation rather than a second
+tracked business-map copy.
 
 ### ViewerPage
 
 Owns the compact human inspection surface shared by static export and Web. It
 combines project selection, relationship/flow switching, business-domain or
 flow selection, map statistics, a restrained legend, pan, zoom, and fit-to-view
-around deterministic SVG projections. Cards render stable business meaning
-only. Pointer or keyboard selection opens the node's navigation anchors and
+around shared SVG geometry and selectable HTML text. Dragging text uses native
+selection and copying; dragging diagram space pans the map. Cards render stable
+business meaning only. Clicking a node or activating it with the keyboard opens its navigation anchors and
 derived related-flow links in an overlaid desktop side panel or narrow-screen
 bottom panel. Selecting a related flow switches to its projected path. Camera
 coordinates use the SVG `xMidYMid meet` scale and letterbox offsets for both
-pointer zoom and pan. Its browser interaction state is disposable and never
+pointer zoom, pan, and HTML placement, including viewport resizing. A fitted
+camera follows content reflow; an explicitly zoomed or panned camera keeps its
+current view. Its browser interaction state is disposable and never
 enters tracked map data.
 
-Static export embeds its complete project model and SVG. Web mode initially
+Static export embeds its complete project model, diagram layers, and the bundled
+Dagre browser runtime, with no network dependency. Web mode initially
 receives only project IDs and display names, then replaces its single current
 model and SVG set when a selection loads. Empty, loading, ready, and unavailable
 states are browser-session state. A monotonically increasing request generation

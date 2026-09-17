@@ -1,5 +1,6 @@
 name: Bug report ｜ 问题报告
 description: Report unexpected behavior with a reproducible example. ｜ 提供可复现的示例，报告异常行为。
+labels: ["bug"]
 body:
   - type: markdown
     attributes:

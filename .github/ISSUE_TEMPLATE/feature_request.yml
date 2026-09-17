@@ -1,5 +1,6 @@
 name: Feature or improvement ｜ 功能或改进建议
 description: Propose a feature, workflow improvement, or documentation change. ｜ 提出新功能、工作流程改进或文档修改建议。
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:

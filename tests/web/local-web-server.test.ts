@@ -115,6 +115,7 @@ describe("Semantic Atlas local Web server", () => {
       error: {
         code: "PROJECT_UNAVAILABLE",
         message: "The registered project path is unavailable.",
+        messageKey: "errors.projectPathUnavailable",
       },
     });
     expect(JSON.stringify(missingEnvelope)).not.toContain(missingRoot);
@@ -127,6 +128,7 @@ describe("Semantic Atlas local Web server", () => {
       error: {
         code: "PROJECT_UNAVAILABLE",
         message: "This project's business map is invalid.",
+        messageKey: "errors.projectMapInvalid",
       },
     });
     expect(JSON.stringify(invalidEnvelope)).not.toContain(invalidRoot);

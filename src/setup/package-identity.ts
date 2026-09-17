@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { readFile } from "node:fs/promises";
 
 export interface PackageIdentity {
@@ -17,7 +18,7 @@ export async function readPackageIdentity(): Promise<PackageIdentity> {
     || typeof packageDocument.version !== "string"
     || packageDocument.version.trim().length === 0
   ) {
-    throw new Error("The installed Semantic Atlas package identity is invalid");
+    throw new Error(t("errors.packageIdentity"));
   }
   return {
     name: packageDocument.name,

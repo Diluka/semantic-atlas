@@ -1,3 +1,4 @@
+import { t, validationOptions } from "../i18n/index.js";
 import { randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -53,19 +54,19 @@ export class ProjectStore {
       if (hasErrorCode(error, "ENOENT")) return [];
       throw new ProjectStoreError(
         "PROJECT_CONFIG_STORAGE_FAILED",
-        `Could not read the registered project file: ${errorMessage(error)}`,
+        t("errors.projectReadDetail", { error: errorMessage(error) }),
         { cause: error },
       );
     }
 
     try {
-      const parsed = projectFileSchema.parse(JSON.parse(document) as unknown);
-      if (!validStoredPaths(parsed.paths)) throw new Error("Project paths are invalid");
+      const parsed = projectFileSchema.parse(JSON.parse(document) as unknown, validationOptions());
+      if (!validStoredPaths(parsed.paths)) throw new Error(t("errors.projectPaths"));
       return Object.freeze([...parsed.paths]);
     } catch (error) {
       throw new ProjectStoreError(
         "PROJECT_CONFIG_INVALID",
-        "The registered project file is not valid Semantic Atlas project configuration",
+        t("errors.projectConfig"),
         { cause: error },
       );
     }
@@ -102,7 +103,7 @@ export class ProjectStore {
     } catch (error) {
       throw new ProjectStoreError(
         "PROJECT_CONFIG_STORAGE_FAILED",
-        `Could not update the registered project file: ${errorMessage(error)}`,
+        t("errors.projectUpdateDetail", { error: errorMessage(error) }),
         { cause: error },
       );
     } finally {
@@ -124,5 +125,5 @@ function hasErrorCode(error: unknown, code: string): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected project configuration failure";
+  return error instanceof Error ? error.message : t("errors.projectFailure");
 }

@@ -33,6 +33,14 @@ semantic-atlas --version
 并升级由其他当前版本安装的 Skill。对于无关或格式已经废弃的同名目录，它会
 拒绝覆盖。
 
+## 界面语言
+
+终端自动读取系统语言环境，依次使用 `LC_ALL`、`LC_MESSAGES`、`LANG`。
+Web 查看器和导出的 HTML 自动使用浏览器语言。支持英语和简体中文，
+未匹配到支持的语言时回退英语，正常使用无需额外配置。
+
+调试覆盖变量和新增翻译的方法见[国际化说明](docs/architecture.md#internationalization)。
+
 ## 升级
 
 ```bash

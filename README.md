@@ -134,6 +134,16 @@ paths. Reselecting or refreshing a project reloads its tracked YAML.
 Repositories with the same directory name receive deterministic numbered
 labels without exposing their parent paths. `Ctrl+C` stops the server.
 
+## Language
+
+The CLI follows your system language (`LC_ALL`, `LC_MESSAGES`, then `LANG`).
+Both the Web Viewer and exported HTML follow your browser's language preferences.
+English and Simplified Chinese are supported, with English as the fallback.
+No language configuration is required for normal use.
+
+See [language selection and adding translations](docs/architecture.md#internationalization)
+for implementation details and the optional debugging override.
+
 ## Evidence Order
 
 For a business-changing engineering task:

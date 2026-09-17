@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import type {
   BusinessFlow,
   BusinessFlowTransitionDefinition,
@@ -28,7 +29,7 @@ function validateFlowIdentities(flows: readonly BusinessFlow[], issues: MapIssue
         flow,
         "DUPLICATE_FLOW_ID",
         flow.id,
-        `Flow '${flow.id}' is also declared by ${existing.documentPath}`,
+        t("errors.duplicateFlow", { flowId: flow.id, documentPath: existing.documentPath }),
       ));
       continue;
     }
@@ -47,14 +48,14 @@ function validateFlow(
       flow,
       "FLOW_SCENARIO_MISSING",
       flow.scenario,
-      `Flow '${flow.id}' references missing scenario '${flow.scenario}'`,
+      t("errors.missingScenario", { flowId: flow.id, scenario: flow.scenario }),
     ));
   } else if (scenario.kind !== "scenario") {
     issues.push(flowIssue(
       flow,
       "FLOW_SCENARIO_KIND_MISMATCH",
       flow.scenario,
-      `Flow '${flow.id}' must belong to a scenario, not ${scenario.kind} '${flow.scenario}'`,
+      t("errors.scenarioKind", { flowId: flow.id, kind: scenario.kind, scenario: flow.scenario }),
     ));
   }
 
@@ -65,7 +66,7 @@ function validateFlow(
       flow,
       "FLOW_START_STEP_MISSING",
       flow.startsAt,
-      `Flow '${flow.id}' starts at missing step '${flow.startsAt}'`,
+      t("errors.missingStart", { flowId: flow.id, startsAt: flow.startsAt }),
     ));
   }
 
@@ -83,7 +84,7 @@ function indexSteps(flow: BusinessFlow, issues: MapIssue[]): ReadonlyMap<string,
         flow,
         "DUPLICATE_FLOW_STEP_ID",
         step.id,
-        `Flow '${flow.id}' declares step '${step.id}' more than once`,
+        t("errors.duplicateStep", { flowId: flow.id, stepId: step.id }),
       ));
       continue;
     }
@@ -103,7 +104,7 @@ function validateStepConcepts(
       flow,
       "FLOW_CONCEPT_MISSING",
       step.concept,
-      `Flow '${flow.id}' step '${step.id}' references missing concept '${step.concept}'`,
+      t("errors.missingConcept", { flowId: flow.id, stepId: step.id, concept: step.concept }),
     ));
   }
 }
@@ -122,7 +123,7 @@ function validateTransitionEndpoints(
         flow,
         "FLOW_TRANSITION_ENDPOINT_MISSING",
         transitionIdentity(transition),
-        `Flow '${flow.id}' transition '${transitionIdentity(transition)}' references missing step '${missingEndpoints.join("', '")}'`,
+        t("errors.missingTransitionStep", { flowId: flow.id, transition: transitionIdentity(transition), endpoints: missingEndpoints.join("', '") }),
       ));
       continue;
     }
@@ -144,7 +145,7 @@ function validateTransitionIdentities(
         flow,
         "DUPLICATE_FLOW_TRANSITION",
         identity,
-        `Flow '${flow.id}' declares transition '${identity}' more than once`,
+        t("errors.duplicateTransition", { flowId: flow.id, identity }),
       ));
     }
     known.add(identity);
@@ -166,7 +167,7 @@ function validateStepBranches(
             flow,
             "FLOW_ACTION_BRANCH_INVALID",
             step.id,
-            `Flow '${flow.id}' action '${step.id}' must have at most one unlabeled transition`,
+            t("errors.actionBranch", { flowId: flow.id, stepId: step.id }),
           ));
         }
         break;
@@ -178,7 +179,7 @@ function validateStepBranches(
             flow,
             "FLOW_DECISION_BRANCH_INVALID",
             step.id,
-            `Flow '${flow.id}' decision '${step.id}' requires at least two transitions with unique branch labels`,
+            t("errors.decisionBranch", { flowId: flow.id, stepId: step.id }),
           ));
         }
         break;
@@ -189,7 +190,7 @@ function validateStepBranches(
             flow,
             "FLOW_OUTCOME_HAS_TRANSITION",
             step.id,
-            `Flow '${flow.id}' outcome '${step.id}' cannot continue to another step`,
+            t("errors.outcomeTransition", { flowId: flow.id, stepId: step.id }),
           ));
         }
         break;
@@ -226,7 +227,7 @@ function validateReachability(
       flow,
       "FLOW_STEP_UNREACHABLE",
       step.id,
-      `Flow '${flow.id}' step '${step.id}' is not reachable from '${flow.startsAt}'`,
+      t("errors.unreachableStep", { flowId: flow.id, stepId: step.id, startsAt: flow.startsAt }),
     ));
   }
 }

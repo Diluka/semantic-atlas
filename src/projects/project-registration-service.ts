@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { MapApplication } from "../application/map-application.js";
 import type { CliError } from "../contracts/cli.js";
 import type { RepositoryMapSource } from "../contracts/map.js";
@@ -42,7 +43,7 @@ export class ProjectRegistrationService {
         ? error
         : new ProjectStoreError(
           "PROJECT_CONFIG_STORAGE_FAILED",
-          "Could not update the registered project file",
+          t("errors.projectUpdate"),
           { cause: error },
         );
       return {

@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
@@ -35,7 +36,7 @@ export class RepositoryIdentityResolver {
     } catch (error) {
       if (error instanceof RepositoryIdentityError) throw error;
       throw new RepositoryIdentityError(
-        `Cannot derive repository identity from: ${repositoryPath}`,
+        t("errors.repositoryIdentity", { repositoryPath }),
       );
     }
   }
@@ -46,14 +47,14 @@ async function resolveDirectory(repositoryPath: string): Promise<string> {
     const resolved = await realpath(repositoryPath);
     if (!(await stat(resolved)).isDirectory()) {
       throw new RepositoryIdentityError(
-        `Repository path is not a directory: ${repositoryPath}`,
+        t("errors.repositoryNotDirectory", { repositoryPath }),
       );
     }
     return resolved;
   } catch (error) {
     if (error instanceof RepositoryIdentityError) throw error;
     throw new RepositoryIdentityError(
-      `Cannot resolve repository directory: ${repositoryPath}`,
+      t("errors.repositoryUnresolved", { repositoryPath }),
     );
   }
 }

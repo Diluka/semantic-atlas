@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
   access,
@@ -75,7 +76,7 @@ export class ManagedSkillConflictError extends Error {
 
   public constructor(public readonly directory: string) {
     super(
-      `Refusing to replace '${directory}' because it is not a recognized managed Semantic Atlas Skill`,
+      t("errors.managedSkillConflict", { directory }),
     );
   }
 }
@@ -107,7 +108,7 @@ export class ManagedSkillInstaller {
   public async install(): Promise<ManagedSkillInstallation> {
     await requireSkillIdentity(
       this.sourceDirectory,
-      "bundled Skill",
+      t("errors.bundledSkill"),
       this.skillName,
     );
     const fingerprint = await fingerprintSkill(this.sourceDirectory);
@@ -191,7 +192,7 @@ export class ManagedSkillInstaller {
       rm(directory, { recursive: true, force: true })
     ));
     if (!await exists(this.targetDirectory)) {
-      throw new Error(`Managed Skill recovery lost '${this.targetDirectory}'`);
+      throw new Error(t("errors.skillRecoveryLost", { targetDirectory: this.targetDirectory }));
     }
   }
 
@@ -255,7 +256,7 @@ class AtomicDirectoryReplacer {
       );
       const targetExists = await exists(targetDirectory);
       if (await exists(backupDirectory)) {
-        throw new Error(`Managed Skill recovery backup still exists at '${backupDirectory}'`);
+        throw new Error(t("errors.skillBackupExists", { backupDirectory }));
       }
       if (targetExists) await this.moveDirectory(targetDirectory, backupDirectory);
       try {
@@ -293,7 +294,7 @@ async function requireSkillIdentity(
   try {
     skillDocument = await readFile(path.join(directory, "SKILL.md"), "utf8");
   } catch {
-    throw new Error(`The ${description} at '${directory}' has no SKILL.md`);
+    throw new Error(t("errors.skillDocumentMissing", { description, directory }));
   }
   const nameLine = new RegExp(
     `^name:\\s*["']?${escapeRegularExpression(skillName)}["']?\\s*$`,
@@ -301,7 +302,7 @@ async function requireSkillIdentity(
   );
   const frontmatter = /^---\r?\n([\s\S]*?)^---\s*$/mu.exec(skillDocument)?.[1];
   if (!frontmatter || !nameLine.test(frontmatter)) {
-    throw new Error(`The ${description} at '${directory}' is not the '${skillName}' Skill`);
+    throw new Error(t("errors.skillIdentity", { description, directory, skillName }));
   }
 }
 

@@ -2,6 +2,13 @@
 
 ## 2026-09-17
 
+- Added i18next catalogs for English and Simplified Chinese: the CLI follows
+  system locale variables and the shared offline/Web Viewer follows browser
+  language preferences through the i18next browser detector.
+- Reserved the product-specific language override for debugging and testing.
+- Defined locale precedence, English fallback, stable machine-readable values,
+  and the independently maintained translation extension point.
+
 - Prepared `semantic-atlas@2.4.0` with complete-diagram image export.
 - Added complete-diagram PNG export to the shared Web and offline Viewer,
   preserving translated text and full layout independently of the camera.

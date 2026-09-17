@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type {
@@ -91,7 +92,7 @@ export class MapApplication {
           repository: result.map.source,
           error: {
             code: "CONCEPT_AMBIGUOUS",
-            message: `Concept selector '${selector}' matches multiple business concepts`,
+            message: t("errors.ambiguousConcept", { selector }),
             selector,
             candidates: query.candidates,
           },
@@ -102,7 +103,7 @@ export class MapApplication {
         repository: result.map.source,
         error: {
           code: "CONCEPT_NOT_FOUND",
-          message: `Concept selector '${selector}' was not found in the business map`,
+          message: t("errors.conceptNotFound", { selector }),
           selector,
         },
       });
@@ -154,7 +155,7 @@ export class MapApplication {
           repository: loaded.source,
           error: {
             code: "MAP_NOT_FOUND",
-            message: `No map documents found in ${loaded.source.mapDirectory}`,
+            message: t("errors.mapNotFound", { mapDirectory: loaded.source.mapDirectory }),
           },
         };
       }
@@ -166,7 +167,7 @@ export class MapApplication {
           repository: loaded.source,
           error: {
             code: "MAP_DOCUMENT_INVALID",
-            message: "Tracked map documents do not form a valid business graph",
+            message: t("errors.invalidGraph"),
             issues: validated.issues,
           },
         };
@@ -179,7 +180,7 @@ export class MapApplication {
           code: error instanceof RepositoryResolutionError
             ? "REPOSITORY_INVALID"
             : "INTERNAL_ERROR",
-          message: error instanceof Error ? error.message : "Unexpected map command failure",
+          message: error instanceof Error ? error.message : t("errors.mapFailure"),
         },
       };
     }

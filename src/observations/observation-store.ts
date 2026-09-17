@@ -1,3 +1,4 @@
+import { t, validationOptions } from "../i18n/index.js";
 import { randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -60,7 +61,7 @@ export class ObservationConflictError extends Error {
     public readonly kind: ObservationKind,
     public readonly id: string,
   ) {
-    super(`${kind} observation '${id}' already exists with different content`);
+    super(t("errors.observationConflict", { kind, id }));
     this.name = "ObservationConflictError";
   }
 }
@@ -114,10 +115,11 @@ export class ObservationStore {
     if (document === undefined) return undefined;
     const parsed = taskObservationSchema.safeParse(
       parseStoredDocument(document, observationPath),
+      validationOptions(),
     );
     if (!parsed.success || !sameRepository(parsed.data.repository, repository)) {
       throw new ObservationStorageError(
-        `Stored task observation '${id}' is invalid`,
+        t("errors.storedTaskInvalid", { id }),
       );
     }
     return parsed.data;
@@ -218,7 +220,7 @@ export class ObservationStore {
     } catch (error) {
       if (error instanceof ObservationConflictError) throw error;
       throw new ObservationStorageError(
-        `Could not record ${kind} observation '${observation.id}': ${errorMessage(error)}`,
+        t("errors.recordObservation", { kind, observationId: observation.id, error: errorMessage(error) }),
         { cause: error },
       );
     } finally {
@@ -246,14 +248,14 @@ export class ObservationStore {
         if (await this.claims.recoverAbandoned(claimPath)) continue;
       } catch (error) {
         throw new ObservationStorageError(
-          `Could not acquire ${kind} observation '${id}': ${errorMessage(error)}`,
+          t("errors.acquireObservation", { kind, id, error: errorMessage(error) }),
           { cause: error },
         );
       }
       await waitForClaim();
     }
     throw new ObservationStorageError(
-      `${kind} observation '${id}' is still being recorded by another process`,
+      t("errors.observationBusy", { kind, id }),
     );
   }
 
@@ -284,7 +286,7 @@ export class ObservationStore {
     } catch (error) {
       if (hasErrorCode(error, "ENOENT")) return [];
       throw new ObservationStorageError(
-        `Could not read ${kind} observations: ${errorMessage(error)}`,
+        t("errors.readObservations", { kind, error: errorMessage(error) }),
         { cause: error },
       );
     }
@@ -296,13 +298,13 @@ export class ObservationStore {
         observationPath,
       );
       const parsed = kind === "task"
-        ? taskObservationSchema.safeParse(value)
+        ? taskObservationSchema.safeParse(value, validationOptions())
         : kind === "review"
-        ? reviewObservationSchema.safeParse(value)
-        : maintenanceObservationSchema.safeParse(value);
+        ? reviewObservationSchema.safeParse(value, validationOptions())
+        : maintenanceObservationSchema.safeParse(value, validationOptions());
       if (!parsed.success || !sameRepository(parsed.data.repository, repository)) {
         throw new ObservationStorageError(
-          `Stored ${kind} observation '${fileName}' is invalid`,
+          t("errors.storedObservationInvalid", { kind, fileName }),
         );
       }
       return parsed.data;
@@ -367,7 +369,7 @@ function parseStoredDocument(document: string, filePath: string): unknown {
     return JSON.parse(document) as unknown;
   } catch (error) {
     throw new ObservationStorageError(
-      `Stored observation '${filePath}' is not valid JSON`,
+      t("errors.storedJsonInvalid", { filePath }),
       { cause: error },
     );
   }
@@ -385,7 +387,7 @@ function hasErrorCode(error: unknown, code: string): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected storage failure";
+  return error instanceof Error ? error.message : t("errors.storageFailure");
 }
 
 function sameRepository(

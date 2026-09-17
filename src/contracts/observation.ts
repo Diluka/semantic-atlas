@@ -1,10 +1,11 @@
+import { t } from "../i18n/index.js";
 import { z } from "zod";
 
 const nonEmptyStringSchema = z.string().trim().min(1).max(2_000);
 const identitySchema = z.string().trim().min(1).max(256);
 const observationIdSchema = identitySchema.regex(
   /^[A-Za-z0-9][A-Za-z0-9._-]*$/u,
-  "Observation IDs use letters, numbers, periods, underscores, and hyphens",
+  { error: () => t("errors.observationId") },
 );
 const repositoryIdSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 const timestampSchema = z.iso.datetime({ offset: true });
@@ -24,7 +25,7 @@ export const evidenceReferenceSchema = z.object({
   context.addIssue({
     code: "custom",
     path: ["reference"],
-    message: "Repository evidence uses a normalized repository-relative path",
+    message: t("errors.evidencePath"),
   });
 });
 
@@ -162,12 +163,12 @@ const maintenanceObservationFields = {
       }
       context.addIssue({
         code: "custom",
-        message: "The owning map is a normalized docs/business-map/*.yaml path",
+        message: t("errors.owningMapPath"),
       });
     }),
     mergedCommit: z.string().regex(
       /^[a-f0-9]{7,64}$/u,
-      "The merged commit is a hexadecimal Git object ID",
+      { error: () => t("errors.mergedCommit") },
     ),
   }).strict().optional(),
 };
@@ -223,7 +224,7 @@ function validateMaintenanceObservation(
       context.addIssue({
         code: "custom",
         path: ["results", index, "candidate"],
-        message: "Each exact candidate source appears once in a maintenance observation",
+        message: t("errors.duplicateCandidate"),
       });
     }
     candidateKeys.add(key);
@@ -236,14 +237,14 @@ function validateMaintenanceObservation(
     context.addIssue({
       code: "custom",
       path: ["mapChange"],
-      message: "Accepted and refined results require the owning map and merged commit",
+      message: t("errors.maintenanceMapRequired"),
     });
   }
   if (!changesMap && observation.mapChange) {
     context.addIssue({
       code: "custom",
       path: ["mapChange"],
-      message: "A map change requires at least one accepted or refined result",
+      message: t("errors.maintenanceResultRequired"),
     });
   }
 }

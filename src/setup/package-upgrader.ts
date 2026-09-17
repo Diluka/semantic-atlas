@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -90,14 +91,14 @@ export class SemanticAtlasPackageUpgrader {
     } catch (error) {
       throw new PackageUpgradeError(
         "check",
-        "npm did not return the latest Semantic Atlas release as JSON",
+        t("errors.latestJson"),
         error instanceof Error ? { cause: error } : undefined,
       );
     }
     if (typeof parsed !== "string" || !stableVersionPattern.test(parsed)) {
       throw new PackageUpgradeError(
         "check",
-        "npm did not return one exact stable Semantic Atlas version",
+        t("errors.stableVersion"),
       );
     }
     return parsed;
@@ -115,7 +116,7 @@ export class SemanticAtlasPackageUpgrader {
     const result = await this.runNpmChecked("locate", ["root", "--global"]);
     const globalRoot = result.stdout.trim();
     if (globalRoot.length === 0) {
-      throw new PackageUpgradeError("locate", "npm did not return its global package root");
+      throw new PackageUpgradeError("locate", t("errors.globalRoot"));
     }
     return path.join(globalRoot, packageName, "dist", "cli", "bin.js");
   }
@@ -133,7 +134,9 @@ export class SemanticAtlasPackageUpgrader {
     if (installedVersion !== targetVersion) {
       throw new PackageUpgradeError(
         "verify",
-        `npm installed Semantic Atlas ${installedVersion || "with no readable version"}; expected ${targetVersion}`,
+        installedVersion
+          ? t("errors.installedVersionMismatch", { installedVersion, targetVersion })
+          : t("errors.installedVersionMissing", { targetVersion }),
       );
     }
   }
@@ -156,7 +159,9 @@ export class SemanticAtlasPackageUpgrader {
     const diagnostic = commandDiagnostic(result);
     throw new PackageUpgradeError(
       step,
-      `Semantic Atlas ${step} failed${diagnostic.length === 0 ? "" : `: ${diagnostic}`}`,
+      diagnostic.length === 0
+        ? t("errors.upgradeFailed", { step })
+        : t("errors.upgradeFailedDetail", { step, diagnostic }),
       result.error ? { cause: result.error } : undefined,
     );
   }

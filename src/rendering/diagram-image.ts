@@ -1,5 +1,11 @@
+import { getTranslator } from "../i18n/index.js";
 import type { toBlob } from "html-to-image";
 import type { DiagramSize } from "./viewer-layout.js";
+
+const t = getTranslator("en");
+
+// A local alias keeps serialized functions independent of module-loader rewrites.
+const defaultTranslate = t;
 
 export interface DiagramImagePlan extends DiagramSize {
   readonly pixelWidth: number;
@@ -7,16 +13,16 @@ export interface DiagramImagePlan extends DiagramSize {
 }
 
 /** 只使用完整布局尺寸，屏幕大小和相机缩放不参与图片分辨率计算。 */
-export function planDiagramImage(bounds: DiagramSize): DiagramImagePlan {
+export function planDiagramImage(bounds: DiagramSize, translate?: typeof t): DiagramImagePlan {
   const width = Math.ceil(bounds.width);
   const height = Math.ceil(bounds.height);
   if (![width, height].every((value) => Number.isFinite(value) && value > 0)) {
-    throw new Error("The diagram has invalid image dimensions.");
+    throw new Error((translate ?? defaultTranslate)("viewer.imageInvalidDimensions"));
   }
   // 同时限制边长和像素总量，避免大图分配数百 MB 以上的单个像素缓冲。
   const scale = Math.min(2, 16384 / width, 16384 / height, Math.sqrt(64_000_000 / (width * height)));
   if (scale < 1) {
-    throw new Error("This diagram is too large for a readable PNG. Select a business domain or flow and export again.");
+    throw new Error((translate ?? defaultTranslate)("viewer.imageTooLarge"));
   }
   return {
     width,
@@ -31,19 +37,20 @@ export async function renderDiagramImage(
   view: HTMLElement,
   rasterize: typeof toBlob,
   planImage: typeof planDiagramImage,
+  translate?: typeof t,
 ): Promise<{ blob: Blob; width: number; height: number }> {
   await document.fonts.ready;
   // 字体或翻译刚改变尺寸时，让 ResizeObserver 和布局帧先完成。
   await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   if (!view.isConnected || view.hidden) {
-    throw new Error("The selected diagram changed. Export the current diagram again.");
+    throw new Error((translate ?? defaultTranslate)("viewer.imageSelectionChanged"));
   }
   const sourceSvg = view.querySelector<SVGSVGElement>("svg");
-  if (!sourceSvg) throw new Error("No diagram is available to export.");
+  if (!sourceSvg) throw new Error((translate ?? defaultTranslate)("viewer.imageNoDiagram"));
   const plan = planImage({
     width: Number(sourceSvg.dataset.canvasWidth),
     height: Number(sourceSvg.dataset.canvasHeight),
-  });
+  }, translate);
   const snapshot = view.cloneNode(true) as HTMLElement;
   const svg = snapshot.querySelector<SVGSVGElement>("svg")!;
   const textLayer = snapshot.querySelector<HTMLElement>(".diagram-text-layer")!;
@@ -88,7 +95,7 @@ export async function renderDiagramImage(
       // 同时清除物理和逻辑偏移，避免计算样式里的 inset-inline 把图片移出画布。
       style: { position: "relative", inset: "auto", insetInline: "auto", insetBlock: "auto" },
     });
-    if (!blob || blob.size === 0) throw new Error("The browser could not create the PNG. Try exporting a smaller business domain or flow.");
+    if (!blob || blob.size === 0) throw new Error((translate ?? defaultTranslate)("viewer.imageCreationFailed"));
     return { blob, width: plan.pixelWidth, height: plan.pixelHeight };
   } finally {
     snapshot.remove();

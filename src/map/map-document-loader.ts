@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -53,12 +54,12 @@ async function resolveRepositoryRoot(repositoryPath: string): Promise<string> {
     const resolved = await realpath(repositoryPath);
     const metadata = await stat(resolved);
     if (!metadata.isDirectory()) {
-      throw new RepositoryResolutionError(`Repository path is not a directory: ${repositoryPath}`);
+      throw new RepositoryResolutionError(t("errors.repositoryNotDirectory", { repositoryPath }));
     }
     return resolved;
   } catch (error) {
     if (error instanceof RepositoryResolutionError) throw error;
-    throw new RepositoryResolutionError(`Cannot resolve repository directory: ${repositoryPath}`);
+    throw new RepositoryResolutionError(t("errors.repositoryUnresolved", { repositoryPath }));
   }
 }
 
@@ -94,7 +95,7 @@ async function loadDocument(
       issue: {
         code: "DOCUMENT_PARSE_FAILED",
         document: fileName,
-        message: error instanceof Error ? error.message : "Map document could not be parsed",
+        message: error instanceof Error ? error.message : t("errors.mapParse"),
       },
     };
   }

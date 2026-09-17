@@ -1,7 +1,10 @@
+import { getTranslator, getResources } from "../i18n/index.js";
 import { escapeHtml } from "./html.js";
 import { renderViewerBrowserScript } from "./viewer-browser.js";
 import type { BusinessFlowStepDefinition } from "../contracts/map.js";
 import type { DiagramLayoutSpec } from "./viewer-layout.js";
+
+const t = getTranslator("en");
 
 export type ViewerMode = "export" | "web";
 
@@ -111,6 +114,7 @@ function renderViewerShell(
 ): string {
   const model = JSON.stringify({
     schemaVersion: 1,
+    resources: getResources(),
     mode,
     projects: displayedProjects.map(({ id, name }) => ({ id, name })),
     projectPayloads,
@@ -121,7 +125,7 @@ function renderViewerShell(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Semantic Atlas business map</title>
+  <title data-i18n="viewer.title">${escapeHtml(t("viewer.title"))}</title>
   <style>${viewerStyles()}</style>
 </head>
 <body data-viewer-mode="${mode}">
@@ -133,75 +137,75 @@ function renderViewerShell(
       </div>
       <div class="viewer-toolbar__selectors">
         <label class="field">
-          <span>Project</span>
-          <select id="project-select" aria-label="Project">
+          <span data-i18n="viewer.project">${escapeHtml(t("viewer.project"))}</span>
+          <select id="project-select" aria-label="${escapeHtml(t("viewer.project"))}" data-i18n-aria-label="viewer.project">
             ${displayedProjects.map(({ id, name }) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`).join("")}
           </select>
         </label>
-        <div class="view-switch" role="group" aria-label="View type">
-          <button type="button" data-view-type="relationships" aria-pressed="true">Relationships</button>
-          <button type="button" data-view-type="flows" aria-pressed="false">Flows</button>
+        <div class="view-switch" role="group" aria-label="${escapeHtml(t("viewer.viewType"))}" data-i18n-aria-label="viewer.viewType">
+          <button type="button" data-view-type="relationships" aria-pressed="true" data-i18n="viewer.relationships">${escapeHtml(t("viewer.relationships"))}</button>
+          <button type="button" data-view-type="flows" aria-pressed="false" data-i18n="viewer.flows">${escapeHtml(t("viewer.flows"))}</button>
         </div>
         <label id="relationship-selector" class="field">
-          <span>Business</span>
-          <select id="domain-select" aria-label="Business domain"></select>
+          <span data-i18n="viewer.business">${escapeHtml(t("viewer.business"))}</span>
+          <select id="domain-select" aria-label="${escapeHtml(t("viewer.businessDomain"))}" data-i18n-aria-label="viewer.businessDomain"></select>
         </label>
         <label id="flow-selector" class="field" hidden>
-          <span>Flow</span>
-          <select id="flow-select" aria-label="Business flow"></select>
+          <span data-i18n="viewer.flow">${escapeHtml(t("viewer.flow"))}</span>
+          <select id="flow-select" aria-label="${escapeHtml(t("viewer.businessFlow"))}" data-i18n-aria-label="viewer.businessFlow"></select>
         </label>
       </div>
       <div class="viewer-toolbar__meta">
         <span id="map-statistics" class="statistics" aria-live="polite"></span>
         <details class="legend">
-          <summary>Legend</summary>
+          <summary data-i18n="viewer.legend">${escapeHtml(t("viewer.legend"))}</summary>
           <div class="legend__panel">
             <span class="legend__line legend__line--containment"></span>
-            <span>Containment relationships</span>
+            <span data-i18n="viewer.containmentRelationships">${escapeHtml(t("viewer.containmentRelationships"))}</span>
             <span class="legend__line legend__line--relation"></span>
-            <span>Directed business relationships</span>
+            <span data-i18n="viewer.directedRelationships">${escapeHtml(t("viewer.directedRelationships"))}</span>
           </div>
         </details>
-        <div class="camera-controls" aria-label="Map controls">
-          <button type="button" data-action="zoom-out" aria-label="Zoom out">-</button>
-          <button type="button" data-action="fit" aria-label="Fit map to window">Fit</button>
-          <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
+        <div class="camera-controls" aria-label="${escapeHtml(t("viewer.mapControls"))}" data-i18n-aria-label="viewer.mapControls">
+          <button type="button" data-action="zoom-out" aria-label="${escapeHtml(t("viewer.zoomOut"))}" data-i18n-aria-label="viewer.zoomOut">-</button>
+          <button type="button" data-action="fit" aria-label="${escapeHtml(t("viewer.fitLabel"))}" data-i18n-aria-label="viewer.fitLabel" data-i18n="viewer.fit">${escapeHtml(t("viewer.fit"))}</button>
+          <button type="button" data-action="zoom-in" aria-label="${escapeHtml(t("viewer.zoomIn"))}" data-i18n-aria-label="viewer.zoomIn">+</button>
         </div>
-        <button type="button" class="export-image" data-action="export-image" title="Download the complete diagram as a high-resolution PNG" disabled>
+        <button type="button" class="export-image" data-action="export-image" title="${escapeHtml(t("viewer.exportTitle"))}" data-i18n-title="viewer.exportTitle" disabled>
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2v10m-4-4 4 4 4-4M3 13v4h14v-4" /></svg>
-          <span>Export PNG</span>
+          <span data-i18n="viewer.exportPng">${escapeHtml(t("viewer.exportPng"))}</span>
         </button>
       </div>
     </header>
-    <section id="map-viewport" class="map-viewport" aria-label="Interactive business map">
+    <section id="map-viewport" class="map-viewport" aria-label="${escapeHtml(t("viewer.interactiveMap"))}" data-i18n-aria-label="viewer.interactiveMap">
       <div id="project-view-host" class="project-view-host">${initialMarkup}</div>
       <p id="export-status" class="export-status" role="status" aria-live="polite" hidden></p>
       <section id="viewer-status" class="viewer-status" role="status" aria-live="polite" ${displayedProjects.length > 0 ? "hidden" : ""}>
         <div class="viewer-status__panel">
-          <p id="viewer-status-eyebrow" class="viewer-status__eyebrow">Project catalog</p>
-          <h1 id="viewer-status-title">${displayedProjects.length > 0 ? "Loading project" : "No projects registered"}</h1>
+          <p id="viewer-status-eyebrow" class="viewer-status__eyebrow" data-i18n="viewer.projectCatalog">${escapeHtml(t("viewer.projectCatalog"))}</p>
+          <h1 id="viewer-status-title">${displayedProjects.length > 0 ? escapeHtml(t("viewer.loadingProject")) : escapeHtml(t("viewer.noProjects"))}</h1>
           <p id="viewer-status-message">${displayedProjects.length > 0
-            ? "Reading the selected business map."
-            : "Run semantic-atlas project add [path], then restart semantic-atlas web."}</p>
+            ? escapeHtml(t("viewer.readingMap"))
+            : escapeHtml(t("viewer.registerProject"))}</p>
         </div>
       </section>
     </section>
     <aside id="node-details" class="node-details" aria-labelledby="node-details-title" hidden>
       <header class="node-details__header">
         <div>
-          <p class="node-details__eyebrow">Concept details</p>
+          <p class="node-details__eyebrow" data-i18n="viewer.conceptDetails">${escapeHtml(t("viewer.conceptDetails"))}</p>
           <p id="node-details-kind" class="node-details__kind"></p>
         </div>
-        <button type="button" class="node-details__close" data-action="close-details" aria-label="Close concept details">&#215;</button>
+        <button type="button" class="node-details__close" data-action="close-details" aria-label="${escapeHtml(t("viewer.closeDetails"))}" data-i18n-aria-label="viewer.closeDetails">&#215;</button>
       </header>
       <h2 id="node-details-title" class="node-details__title"></h2>
       <p id="node-details-summary" class="node-details__summary"></p>
       <section id="node-details-flows" class="node-details__related" aria-labelledby="node-details-flows-title" hidden>
-        <h3 id="node-details-flows-title">Related business flows</h3>
+        <h3 id="node-details-flows-title" data-i18n="viewer.relatedFlows">${escapeHtml(t("viewer.relatedFlows"))}</h3>
         <div id="node-details-flow-list" class="node-details__flow-list"></div>
       </section>
       <section id="node-details-anchors" class="node-details__anchors" aria-labelledby="node-details-anchors-title" hidden>
-        <h3 id="node-details-anchors-title">Navigation anchors</h3>
+        <h3 id="node-details-anchors-title" data-i18n="viewer.navigationAnchors">${escapeHtml(t("viewer.navigationAnchors"))}</h3>
         <div id="node-details-anchor-list" class="node-details__anchor-list"></div>
       </section>
     </aside>

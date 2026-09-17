@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { randomUUID } from "node:crypto";
 import {
   link,
@@ -21,7 +22,7 @@ export interface ObservationClaim {
 
 export class UnsupportedObservationClaimError extends Error {
   public constructor(public readonly claimPath: string) {
-    super(`Observation claim '${claimPath}' uses an unsupported claim format`);
+    super(t("errors.unsupportedClaim", { claimPath }));
     this.name = "UnsupportedObservationClaimError";
   }
 }
@@ -59,7 +60,7 @@ export class ObservationClaimManager {
   ): Promise<void> {
     const currentOwner = await readClaim(claimPath);
     if (sameClaimOwner(currentOwner, expectedOwner)) return;
-    throw new Error("Observation claim ownership changed before publication");
+    throw new Error(t("errors.claimOwnership"));
   }
 
   public async release(

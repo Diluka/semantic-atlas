@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { MapApplication } from "../application/map-application.js";
@@ -22,6 +23,7 @@ export type WebProjectLoadResult =
       readonly found: true;
       readonly ok: false;
       readonly message: string;
+      readonly messageKey: string;
     }
   | {
       readonly found: false;
@@ -62,10 +64,12 @@ export class LocalWebApplication {
       name: project.name,
     });
     if (!result.ok) {
+      const messageKey = safeUnavailableMessageKey(result.error.code);
       return {
         found: true,
         ok: false,
-        message: safeUnavailableMessage(result.error.code),
+        message: t(messageKey),
+        messageKey,
       };
     }
     return {
@@ -98,9 +102,9 @@ function disambiguateProjectNames(projects: readonly WebProject[]): readonly Web
   });
 }
 
-function safeUnavailableMessage(code: string): string {
-  if (code === "MAP_NOT_FOUND") return "No business map is configured for this project.";
-  if (code === "MAP_DOCUMENT_INVALID") return "This project's business map is invalid.";
-  if (code === "REPOSITORY_INVALID") return "The registered project path is unavailable.";
-  return "This project's business map could not be loaded.";
+function safeUnavailableMessageKey(code: string): string {
+  if (code === "MAP_NOT_FOUND") return "errors.projectMapMissing";
+  if (code === "MAP_DOCUMENT_INVALID") return "errors.projectMapInvalid";
+  if (code === "REPOSITORY_INVALID") return "errors.projectPathUnavailable";
+  return "errors.projectMapUnavailable";
 }

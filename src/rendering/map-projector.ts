@@ -1,3 +1,4 @@
+import { getTranslator } from "../i18n/index.js";
 import dagre from "@dagrejs/dagre";
 import stringWidth from "string-width";
 import type { MapProjection } from "../contracts/projection.js";
@@ -6,7 +7,7 @@ import type {
   BusinessRelation,
 } from "../contracts/map.js";
 import { BusinessGraph } from "../map/business-graph.js";
-import { escapeHtml, safeDomToken } from "./html.js";
+import { escapeHtml, safeDomToken, translationAttributes } from "./html.js";
 import { FlowProjector } from "./flow-projector.js";
 import { layoutDiagram, type DiagramLayoutSpec } from "./viewer-layout.js";
 import {
@@ -15,6 +16,8 @@ import {
   type ViewerNodeDetails,
   type ViewerProject,
 } from "./viewer-page.js";
+
+const t = getTranslator("en");
 
 const CARD_WIDTH = 320;
 const CARD_PADDING = 18;
@@ -62,7 +65,7 @@ export class MapProjector {
   public constructor(private readonly graph: BusinessGraph) {}
 
   public project(
-    metadata: ViewerProjectMetadata = { id: "repository", name: "Business map" },
+    metadata: ViewerProjectMetadata = { id: "repository", name: t("viewer.businessMap") },
   ): MapProjection {
     const viewerProject = this.viewerProject(metadata);
     const completeView = viewerProject.views[0]!;
@@ -81,7 +84,7 @@ export class MapProjector {
     const completeRelations = this.graph.relations();
     const completeView = this.projectView({
       id: "all",
-      name: "All business",
+      name: t("viewer.allBusiness"),
       nodes: completeNodes,
       relations: completeRelations,
       boundaryNodeIds: new Set(),
@@ -204,7 +207,7 @@ function presentRelation(relation: BusinessRelation): RelationPresentation {
     relation,
     id: relationIdentity(relation),
     channel: containment ? "containment" : "directed-relation",
-    label: containment ? "contains" : relation.type.replaceAll("_", " "),
+    label: t(`viewer.relationKinds.${containment ? "contains" : relation.type}`),
     layoutFrom: containment ? relation.to : relation.from,
     layoutTo: containment ? relation.from : relation.to,
   };
@@ -259,8 +262,8 @@ function renderMapSvg(layout: ProjectionLayout, identity: string): string {
   const markerId = `relation-arrow-${domToken}`;
 
   return `<svg class="map-svg" data-canvas-width="${formatNumber(canvasWidth)}" data-canvas-height="${formatNumber(canvasHeight)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" viewBox="0 0 ${formatNumber(canvasWidth)} ${formatNumber(canvasHeight)}" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="semantic-atlas-title-${domToken} semantic-atlas-description-${domToken}">
-        <title id="semantic-atlas-title-${domToken}">Semantic Atlas business map</title>
-        <desc id="semantic-atlas-description-${domToken}">An interactive business graph. Dashed lines represent containment. Solid lines with arrowheads represent directed business relationships.</desc>
+        <title id="semantic-atlas-title-${domToken}" data-i18n="viewer.title">${escapeHtml(t("viewer.title"))}</title>
+        <desc id="semantic-atlas-description-${domToken}" data-i18n="viewer.mapDescription">${escapeHtml(t("viewer.mapDescription"))}</desc>
         <defs>
           <pattern id="${patternId}" width="28" height="28" patternUnits="userSpaceOnUse">
             <path class="grid-line" d="M 28 0 L 0 0 0 28" fill="none" />
@@ -298,15 +301,26 @@ function renderRelation(
 ): string {
   const source = nodeById.get(relation.relation.from);
   const target = nodeById.get(relation.relation.to);
-  const ariaLabel = relation.channel === "containment"
-    ? `${target?.name ?? relation.relation.to} contains ${source?.name ?? relation.relation.from}`
-    : `${source?.name ?? relation.relation.from} ${relation.label} ${target?.name ?? relation.relation.to}`;
+  const containment = relation.channel === "containment";
+  const values = {
+    parent: target?.name ?? relation.relation.to,
+    child: source?.name ?? relation.relation.from,
+    source: source?.name ?? relation.relation.from,
+    target: target?.name ?? relation.relation.to,
+    summary: relation.relation.summary,
+    relation: t(`viewer.relationKinds.${relation.relation.type}`),
+  };
+  // The relationship key belongs to the product, while names and summaries stay literal.
+  const ariaKey = containment ? "viewer.containsLabel" : "viewer.relationLabel";
+  const ariaLabel = t(ariaKey, values);
+  const relationMarker = `data-i18n-relation-kind="${relation.relation.type}"`;
+  const titleKey = containment ? "viewer.containsSummary" : "viewer.relationSummary";
   const marker = relation.channel === "directed-relation"
     ? ` marker-end="url(#${markerId})"`
     : "";
 
-  return `<g class="edge edge--${relation.channel}" data-channel="${relation.channel}" data-relation-id="${escapeHtml(relation.id)}" data-layout-edge="${escapeHtml(relation.id)}" data-relation-type="${escapeHtml(relation.relation.type)}" role="group" aria-label="${escapeHtml(ariaLabel)}">
-            <title>${escapeHtml(`${ariaLabel}: ${relation.relation.summary}`)}</title>
+  return `<g class="edge edge--${relation.channel}" data-channel="${relation.channel}" data-relation-id="${escapeHtml(relation.id)}" data-layout-edge="${escapeHtml(relation.id)}" data-relation-type="${escapeHtml(relation.relation.type)}" role="group" ${translationAttributes(ariaKey, values, "aria-label")} ${relationMarker} aria-label="${escapeHtml(ariaLabel)}">
+            <title ${translationAttributes(titleKey, values)} ${relationMarker}>${escapeHtml(t(titleKey, values))}</title>
             <path class="edge__path" d="${routePath(relation.route)}"${marker} />
           </g>`;
 }
@@ -326,7 +340,7 @@ function renderMapTextLayer(layout: ProjectionLayout): string {
   const { offsetX, offsetY } = layout;
   const cards = layout.nodes.map((node) => renderNodeText(node, offsetX, offsetY));
   const labels = layout.relations.map((relation) =>
-    `<span class="diagram-label edge__label edge__label--${relation.channel}" data-layout-edge="${escapeHtml(relation.id)}" style="left:${formatNumber(relation.labelX + offsetX)}px;top:${formatNumber(relation.labelY + offsetY)}px">${escapeHtml(relation.label)}</span>`);
+    `<span class="diagram-label edge__label edge__label--${relation.channel}" data-layout-edge="${escapeHtml(relation.id)}" data-i18n="viewer.relationKinds.${relation.channel === "containment" ? "contains" : relation.relation.type}" style="left:${formatNumber(relation.labelX + offsetX)}px;top:${formatNumber(relation.labelY + offsetY)}px">${escapeHtml(relation.label)}</span>`);
   return [...cards, ...labels].join("\n");
 }
 
@@ -334,7 +348,7 @@ function renderNodeText(node: PositionedNode, offsetX: number, offsetY: number):
   const left = node.x - node.width / 2 + offsetX;
   const top = node.y - node.height / 2 + offsetY;
   return `<div class="diagram-card-text diagram-card-text--relationship" data-node-id="${escapeHtml(node.node.id)}" data-layout-node="${escapeHtml(node.node.id)}" style="left:${formatNumber(left)}px;top:${formatNumber(top)}px;width:${formatNumber(node.width)}px;min-height:${formatNumber(node.height)}px">
-              <p class="node-card__kind">${escapeHtml(node.node.kind)}</p>
+              <p class="node-card__kind" data-i18n="viewer.nodeKinds.${node.node.kind}">${escapeHtml(t(`viewer.nodeKinds.${node.node.kind}`))}</p>
               <h3 class="node-card__title">${escapeHtml(node.node.name)}</h3>
               <p class="node-card__summary">${escapeHtml(node.node.summary)}</p>
             </div>`;
@@ -397,7 +411,7 @@ function relationIdentity(relation: BusinessRelation): string {
 }
 
 function relationLabelWidth(label: string): number {
-  return Math.max(76, label.length * 7.2 + 24);
+  return Math.max(76, stringWidth(label) * 7.2 + 24);
 }
 
 function comparePresentedNodes(left: NodePresentation, right: NodePresentation): number {

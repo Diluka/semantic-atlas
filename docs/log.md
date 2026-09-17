@@ -2,6 +2,13 @@
 
 ## 2026-09-17
 
+- Added i18next catalogs for English and Simplified Chinese: the CLI follows
+  system locale variables and the shared offline/Web Viewer follows browser
+  language preferences through the i18next browser detector.
+- Reserved the product-specific language override for debugging and testing.
+- Defined locale precedence, English fallback, stable machine-readable values,
+  and the independently maintained translation extension point.
+
 - Added bilingual English/Chinese GitHub Issue forms for bug reports and
   improvement proposals, and a concise bilingual pull request template covering
   outcomes, related issues, validation, and applicable impact or maintenance

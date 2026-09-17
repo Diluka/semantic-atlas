@@ -223,6 +223,20 @@ async function exerciseInstalledProduct() {
   assert.match(projection, /"value":"src\/catalog"/u);
   assert.doesNotMatch(projection, /class="node-card__anchor/u);
 
+  const chineseEnvironment = { ...cliEnvironment, SEMANTIC_ATLAS_LANG: "", LC_ALL: "zh_CN.UTF-8" };
+  const chineseHelp = run(process.execPath, [installedCli, "--help"], consumerDirectory, chineseEnvironment);
+  assert.match(chineseHelp.stdout, /用法/u);
+  const chineseContext = run(process.execPath, [installedCli, "context", "Checkout", "--repo", repositoryRoot], consumerDirectory, chineseEnvironment);
+  assert.deepEqual(JSON.parse(chineseContext.stdout), JSON.parse(context.stdout));
+  const chineseOutputPath = path.join(sandbox, "business-map.zh-CN.html");
+  run(process.execPath, [installedCli, "render", "--repo", repositoryRoot, "--output", chineseOutputPath], consumerDirectory, chineseEnvironment);
+  const chineseProjection = await readFile(chineseOutputPath, "utf8");
+  assert.equal(chineseProjection, projection, "HTML must not inherit the terminal locale");
+  assert.match(chineseProjection, /<html lang="en">/u);
+  assert.match(chineseProjection, /i18nextBrowserLanguageDetector/u);
+  assert.match(chineseProjection, /i18next/u);
+  assert.doesNotMatch(chineseProjection, /<script[^>]+src=/u);
+
   const firstRegistration = JSON.parse(runInstalledCli(
     ["project", "add"],
     repositoryRoot,
@@ -241,6 +255,7 @@ async function exerciseInstalledProduct() {
   );
 
   await exerciseInstalledWeb([], repositoryRoot);
+  await exerciseInstalledWeb([], repositoryRoot, chineseEnvironment);
 
   const explicitRepositoryRoot = path.join(sandbox, "explicit-repository");
   const explicitMapDirectory = path.join(explicitRepositoryRoot, "docs", "business-map");
@@ -276,7 +291,7 @@ async function exerciseInstalledProduct() {
   );
 }
 
-async function exerciseInstalledWeb(repositoryArguments, selectedRepositoryRoot) {
+async function exerciseInstalledWeb(repositoryArguments, selectedRepositoryRoot, environment = cliEnvironment) {
   const port = await reserveLoopbackPort();
   const child = spawn(process.execPath, [
     installedCli,
@@ -287,7 +302,7 @@ async function exerciseInstalledWeb(repositoryArguments, selectedRepositoryRoot)
     "--no-open",
   ], {
     cwd: consumerDirectory,
-    env: cliEnvironment,
+    env: environment,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
@@ -319,6 +334,10 @@ async function exerciseInstalledWeb(repositoryArguments, selectedRepositoryRoot)
         ?? "{}",
     );
     assert.equal(page.status, 200);
+    if (environment.LC_ALL === "zh_CN.UTF-8") {
+      assert.equal(model.locale, undefined);
+      assert.match(html, /<html lang="en">/u);
+    }
     assert.match(html, /data-viewer-mode="web"/u);
     assert.match(html, /data-view-type="flows"/u);
     assert.match(html, /id="node-details"/u);
@@ -330,6 +349,9 @@ async function exerciseInstalledWeb(repositoryArguments, selectedRepositoryRoot)
     const project = await fetch(`${envelope.data.url}/api/projects/${model.projects[0].id}`);
     const projectEnvelope = await project.json();
     assert.equal(project.status, 200);
+    if (environment.LC_ALL === "zh_CN.UTF-8") {
+      assert.match(projectEnvelope.data.markup, />domain<\/p>/u);
+    }
     assert.equal(project.headers.get("cache-control"), "no-store");
     assert.match(projectEnvelope.data.markup, /data-map-view="commerce"/u);
     assert.match(projectEnvelope.data.markup, /data-flow-view="commerce\.orders\.place-order-flow"/u);

@@ -1,3 +1,7 @@
+import type LanguageDetector from "i18next-browser-languagedetector";
+import { normalizeLocale } from "../i18n/locale.js";
+import type { i18n, Resource } from "i18next";
+import { dirname, join } from "node:path";
 import {
   clamp,
   fitViewBox,
@@ -21,6 +25,12 @@ import type * as htmlToImage from "html-to-image";
 import { planDiagramImage, renderDiagramImage } from "./diagram-image.js";
 
 const require = createRequire(import.meta.url);
+const i18nextRoot = dirname(require.resolve("i18next/package.json"));
+const i18nextBrowserScript = `/*! i18next (MIT)\n${readFileSync(join(i18nextRoot, "LICENSE"), "utf8")}*/\n`
+  + readFileSync(join(i18nextRoot, "dist/umd/i18next.min.js"), "utf8");
+const languageDetectorRoot = dirname(require.resolve("i18next-browser-languagedetector/package.json"));
+const languageDetectorBrowserScript = `/*! i18next-browser-languagedetector (MIT)\n${readFileSync(join(languageDetectorRoot, "LICENSE"), "utf8")}*/\n`
+  + readFileSync(join(languageDetectorRoot, "i18nextBrowserLanguageDetector.min.js"), "utf8");
 const dagreLicense = readFileSync(require.resolve("@dagrejs/dagre/LICENSE"), "utf8");
 const dagreBrowserScript = `/*! @dagrejs/dagre and @dagrejs/graphlib (MIT)\n${dagreLicense}*/\n`
   + readFileSync(require.resolve("@dagrejs/dagre/dist/dagre.min.js"), "utf8");
@@ -81,6 +91,7 @@ interface ViewerProjectPayloadModel {
 }
 
 interface ViewerModel {
+  readonly resources: Resource;
   readonly schemaVersion: 1;
   readonly mode: "export" | "web";
   readonly projects: readonly ViewerProjectReferenceModel[];
@@ -94,11 +105,15 @@ interface WebProjectEnvelope {
   readonly error?: {
     readonly code: string;
     readonly message: string;
+    readonly messageKey?: string;
   };
 }
 
 export function renderViewerBrowserScript(): string {
   return [
+    i18nextBrowserScript,
+    languageDetectorBrowserScript,
+    normalizeLocale.toString(),
     dagreBrowserScript,
     imageBrowserScript,
     `const MAP_SCALE_LIMITS = ${JSON.stringify(MAP_SCALE_LIMITS)};`,
@@ -112,6 +127,7 @@ export function renderViewerBrowserScript(): string {
     createLatestProjectLoader.toString(),
     layoutDiagram.toString(),
     createDiagramLayoutController.toString(),
+    "const defaultTranslate = globalThis.i18next.t.bind(globalThis.i18next);",
     planDiagramImage.toString(),
     renderDiagramImage.toString(),
     "globalThis.__semanticAtlasDiagramImage = { planDiagramImage, renderDiagramImage };",
@@ -119,7 +135,7 @@ export function renderViewerBrowserScript(): string {
     "globalThis.__semanticAtlasCreateLatestProjectLoader = createLatestProjectLoader;",
     "globalThis.__semanticAtlasLayoutDiagram = layoutDiagram;",
     "globalThis.__semanticAtlasCreateDiagramLayoutController = createDiagramLayoutController;",
-    `(${viewerBrowserEntry.toString()})();`,
+    `(${viewerBrowserEntry.toString()})(normalizeLocale);`,
   ].join("\n");
 }
 
@@ -153,8 +169,10 @@ interface MapDragState {
 
 type ViewerViewType = "relationships" | "flows";
 
-function viewerBrowserEntry(): void {
+function viewerBrowserEntry(normalizeLocale: (value: string) => "en" | "zh-CN" | undefined): void {
   const browserGlobal = globalThis as typeof globalThis & {
+    readonly i18next: i18n;
+    readonly i18nextBrowserLanguageDetector: typeof LanguageDetector;
     readonly dagre: typeof dagre;
     readonly htmlToImage: typeof htmlToImage;
     readonly __semanticAtlasDiagramImage: {
@@ -228,6 +246,37 @@ function viewerBrowserEntry(): void {
   ) return;
 
   const model = JSON.parse(modelElement.textContent ?? "{}") as ViewerModel;
+  const translator = browserGlobal.i18next;
+  translator.use(browserGlobal.i18nextBrowserLanguageDetector);
+  void translator.init({
+    resources: model.resources,
+    initAsync: false,
+    supportedLngs: ["en", "zh-CN"],
+    fallbackLng: "en",
+    detection: {
+      order: ["navigator"],
+      caches: [],
+      convertDetectedLanguage: (value: string) => normalizeLocale(value) ?? "und",
+    },
+    interpolation: { escapeValue: false },
+  });
+  const t = (key: string, values?: Record<string, unknown>): string => translator.t(key, values ?? {});
+  document.documentElement.lang = translator.resolvedLanguage ?? "en";
+  const translateMarkup = (root: Document | HTMLElement): void => {
+    const elements = root.querySelectorAll<HTMLElement>("[data-i18n], [data-i18n-aria-label], [data-i18n-title]");
+    for (const element of Array.from(elements)) {
+      const values = JSON.parse(element.getAttribute("data-i18n-options") ?? "{}") as Record<string, unknown>;
+      const relationKind = element.getAttribute("data-i18n-relation-kind");
+      if (relationKind) values.relation = t(`viewer.relationKinds.${relationKind}`);
+      const textKey = element.getAttribute("data-i18n");
+      if (textKey) element.textContent = t(textKey, values);
+      for (const attribute of ["aria-label", "title"] as const) {
+        const key = element.getAttribute(`data-i18n-${attribute}`);
+        if (key) element.setAttribute(attribute, t(key, values));
+      }
+    }
+  };
+  translateMarkup(document);
   const cameras = new Map<string, MapViewBox>();
   let activeProjectId = model.projects[0]?.id;
   let activeProject: ViewerProjectModel | undefined;
@@ -341,7 +390,7 @@ function viewerBrowserEntry(): void {
     const reference = model.projects.find(({ id }) => id === projectId);
     const option = Array.from(projectSelect.options).find(({ value }) => value === projectId);
     if (!reference || !option) return;
-    option.textContent = unavailable ? `${reference.name} - Unavailable` : reference.name;
+    option.textContent = unavailable ? t("viewer.unavailableProject", { name: reference.name }) : reference.name;
   };
 
   const enterLoading = (projectId: string): void => {
@@ -350,9 +399,9 @@ function viewerBrowserEntry(): void {
     clearProject();
     viewport.setAttribute("aria-busy", "true");
     showStatus(
-      "Loading project",
-      reference?.name ?? "Business map",
-      "Loading and validating the selected project's tracked map.",
+      t("viewer.loadingProject"),
+      reference?.name ?? t("viewer.businessMap"),
+      t("viewer.loadingMap"),
     );
   };
 
@@ -362,8 +411,8 @@ function viewerBrowserEntry(): void {
     markProjectAvailability(projectId, true);
     const message = error instanceof Error
       ? error.message
-      : "This project's business map could not be loaded.";
-    showStatus("Unavailable", "This project is unavailable", message);
+      : t("viewer.loadFailed");
+    showStatus(t("viewer.unavailable"), t("viewer.projectUnavailable"), message);
   };
 
   const createAnchorElement = (anchor: ViewerNavigationAnchorModel): HTMLElement => {
@@ -371,7 +420,7 @@ function viewerBrowserEntry(): void {
     element.className = "node-details__anchor";
     const kind = document.createElement("span");
     kind.className = "node-details__anchor-kind";
-    kind.textContent = anchor.kind;
+    kind.textContent = t(`viewer.anchorKinds.${anchor.kind}`);
     const value = document.createElement("code");
     value.textContent = anchor.value;
     const description = document.createElement("p");
@@ -409,8 +458,8 @@ function viewerBrowserEntry(): void {
     activeNodeElement = nodeElement;
     nodeElement.setAttribute("aria-expanded", "true");
     detailsKind.textContent = node.boundary
-      ? `${node.kind} / external boundary`
-      : node.kind;
+      ? t("viewer.externalBoundary", { kind: t(`viewer.nodeKinds.${node.kind}`) })
+      : t(`viewer.nodeKinds.${node.kind}`);
     detailsTitle.textContent = node.name;
     detailsSummary.textContent = node.summary;
     detailsFlowList.replaceChildren(...node.relatedFlowIds.map(createFlowLink));
@@ -426,7 +475,7 @@ function viewerBrowserEntry(): void {
     domainSelect.replaceChildren(...(project?.views ?? []).map((view) => {
       const option = document.createElement("option");
       option.value = view.id;
-      option.textContent = view.name;
+      option.textContent = view.id === "all" ? t("viewer.allBusiness") : view.name;
       return option;
     }));
     if (!project?.views.some(({ id }) => id === activeViewId)) {
@@ -472,11 +521,11 @@ function viewerBrowserEntry(): void {
     const flow = currentFlow();
     statistics.textContent = activeViewType === "relationships"
       ? view
-        ? `${view.nodeCount} concepts / ${view.relationCount} relationships`
-        : "No business map"
+        ? t("viewer.mapStatistics", { nodes: view.nodeCount, relations: view.relationCount })
+        : t("viewer.noMap")
       : flow
-        ? `${flow.stepCount} steps / ${flow.transitionCount} transitions / ${flow.scenario.name}`
-        : "No business flows";
+        ? t("viewer.flowStatistics", { steps: flow.stepCount, transitions: flow.transitionCount, scenario: flow.scenario.name })
+        : t("viewer.noFlows");
     const svg = activeSvg();
     exportButton.disabled = !svg || exporting;
     const definition = activeViewType === "relationships" ? view : flow;
@@ -494,6 +543,7 @@ function viewerBrowserEntry(): void {
     activeViewId = payload.project.views[0]?.id;
     activeFlowId = payload.project.flows[0]?.id;
     if (payload.markup) projectViewHost.innerHTML = payload.markup;
+    translateMarkup(projectViewHost);
     viewport.setAttribute("aria-busy", "false");
     viewerStatus.hidden = true;
     markProjectAvailability(projectId, false);
@@ -516,11 +566,15 @@ function viewerBrowserEntry(): void {
     const envelope = await response.json() as WebProjectEnvelope;
     if (!response.ok || !envelope.ok || !envelope.data) {
       throw new Error(
-        envelope.error?.message ?? "This project's business map could not be loaded.",
+        envelope.error?.messageKey && [
+          "errors.projectMapMissing", "errors.projectMapInvalid", "errors.projectPathUnavailable",
+          "errors.projectMapUnavailable", "errors.projectNotFound",
+        ].includes(envelope.error.messageKey)
+          ? t(envelope.error.messageKey) : t("viewer.loadFailed"),
       );
     }
     if (envelope.data.project.id !== projectId) {
-      throw new Error("The selected project returned an invalid response.");
+      throw new Error(t("viewer.invalidResponse"));
     }
     return envelope.data;
   };
@@ -544,7 +598,7 @@ function viewerBrowserEntry(): void {
     activeViewType = "relationships";
     const payload = model.projectPayloads.find(({ project }) => project.id === projectId);
     if (payload) enterReady(payload, projectId);
-    else enterUnavailable(new Error("The exported project could not be loaded."), projectId);
+    else enterUnavailable(new Error(t("viewer.exportedLoadFailed")), projectId);
   };
 
   const zoom = (factor: number, pointer?: MapPoint): void => {
@@ -574,10 +628,10 @@ function viewerBrowserEntry(): void {
     exportButton.disabled = true;
     exportButton.setAttribute("aria-busy", "true");
     exportStatus.hidden = false;
-    exportStatus.textContent = "Preparing full diagram PNG…";
+    exportStatus.textContent = t("viewer.preparingPng");
     try {
       const imageApi = browserGlobal.__semanticAtlasDiagramImage;
-      const image = await imageApi.renderDiagramImage(view, browserGlobal.htmlToImage.toBlob, imageApi.planDiagramImage);
+      const image = await imageApi.renderDiagramImage(view, browserGlobal.htmlToImage.toBlob, imageApi.planDiagramImage, t);
       const url = URL.createObjectURL(image.blob);
       const link = document.createElement("a");
       link.href = url;
@@ -585,9 +639,9 @@ function viewerBrowserEntry(): void {
       link.click();
       // 下载在浏览器中异步开始，保留 URL 到下载接管之后。
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      exportStatus.textContent = `PNG ready · ${image.width} × ${image.height} pixels`;
+      exportStatus.textContent = t("viewer.pngReady", { width: image.width, height: image.height });
     } catch (error) {
-      exportStatus.textContent = error instanceof Error ? error.message : "The image could not be exported. Please try again.";
+      exportStatus.textContent = error instanceof Error ? error.message : t("viewer.exportFailed");
     } finally {
       exporting = false;
       exportButton.removeAttribute("aria-busy");
@@ -749,9 +803,9 @@ function viewerBrowserEntry(): void {
     projectSelect.disabled = true;
     viewport.setAttribute("aria-busy", "false");
     showStatus(
-      "Project catalog",
-      "No projects registered",
-      "Run semantic-atlas project add [path], then restart semantic-atlas web.",
+      t("viewer.projectCatalog"),
+      t("viewer.noProjects"),
+      t("viewer.registerProject"),
     );
   }
 }

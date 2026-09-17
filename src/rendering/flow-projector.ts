@@ -1,3 +1,4 @@
+import { getTranslator } from "../i18n/index.js";
 import dagre from "@dagrejs/dagre";
 import stringWidth from "string-width";
 import type {
@@ -9,6 +10,8 @@ import { BusinessGraph } from "../map/business-graph.js";
 import { escapeHtml, safeDomToken } from "./html.js";
 import type { ViewerBusinessFlow } from "./viewer-page.js";
 import { layoutDiagram, type DiagramLayoutSpec } from "./viewer-layout.js";
+
+const t = getTranslator("en");
 
 const ACTION_WIDTH = 320;
 const DECISION_WIDTH = 560;
@@ -199,7 +202,7 @@ function renderStepText(step: PositionedFlowStep, offsetX: number, offsetY: numb
   const left = step.x - width / 2 + offsetX;
   const top = step.y - height / 2 + offsetY;
   return `<div class="diagram-card-text diagram-card-text--flow diagram-card-text--${step.step.kind}" data-flow-step-id="${escapeHtml(step.step.id)}" data-layout-node="${escapeHtml(step.step.id)}" style="left:${formatNumber(left)}px;top:${formatNumber(top)}px;width:${formatNumber(width)}px;min-height:${formatNumber(height)}px">
-              <p class="flow-step__kind">${escapeHtml(step.step.kind)}</p>
+              <p class="flow-step__kind" data-i18n="viewer.stepKinds.${step.step.kind}">${escapeHtml(t(`viewer.stepKinds.${step.step.kind}`))}</p>
               <h3 class="flow-step__title">${escapeHtml(step.step.name)}</h3>
               <p class="flow-step__summary">${escapeHtml(step.step.summary)}</p>
             </div>`;

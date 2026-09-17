@@ -1,3 +1,4 @@
+import { t, validationOptions } from "../i18n/index.js";
 import path from "node:path";
 import type { ZodIssue } from "zod";
 import {
@@ -35,7 +36,7 @@ export class MapValidator {
     const shapeIssues = [...loadIssues];
 
     for (const loadedDocument of loadedDocuments) {
-      const parsed = mapDocumentSchema.safeParse(loadedDocument.value);
+      const parsed = mapDocumentSchema.safeParse(loadedDocument.value, validationOptions());
       if (!parsed.success) {
         shapeIssues.push(...parsed.error.issues.map((issue) =>
           schemaIssue(loadedDocument.fileName, issue)));
@@ -156,7 +157,7 @@ function validateDocumentIds(
         code: "DUPLICATE_DOCUMENT_ID",
         document: fileName,
         subject: document.map.id,
-        message: `Document ID '${document.map.id}' is also declared by ${existing}`,
+        message: t("errors.duplicateDocument", { documentId: document.map.id, existing }),
       });
     } else {
       ownerById.set(document.map.id, fileName);
@@ -173,7 +174,7 @@ function validateNodeIdentities(nodes: readonly BusinessNode[], issues: MapIssue
         code: "DUPLICATE_NODE_ID",
         document: node.documentPath,
         subject: node.id,
-        message: `Node '${node.id}' is also declared by ${existing.documentPath}`,
+        message: t("errors.duplicateNode", { nodeId: node.id, documentPath: existing.documentPath }),
       });
     } else {
       ownerById.set(node.id, node);
@@ -190,7 +191,7 @@ function validateAliases(node: BusinessNode, issues: MapIssue[]): void {
         code: "DUPLICATE_NODE_ALIAS",
         document: node.documentPath,
         subject: node.id,
-        message: `Node '${node.id}' declares duplicate alias '${alias}'`,
+        message: t("errors.duplicateAlias", { nodeId: node.id, alias }),
       });
     }
     aliases.add(normalized);
@@ -206,7 +207,7 @@ function validateAnchors(node: BusinessNode, issues: MapIssue[]): void {
       document: node.documentPath,
       path: `nodes.${node.id}.anchors.${index}.value`,
       subject: node.id,
-      message: `Anchor '${anchor.value}' must be a normalized repository-relative path`,
+      message: t("errors.invalidAnchor", { value: anchor.value }),
     });
   }
 }
@@ -225,7 +226,7 @@ function validateRelations(
         code: "DUPLICATE_RELATION",
         document: relation.documentPath,
         subject: key,
-        message: `Relation '${key}' is also declared by ${existing.documentPath}`,
+        message: t("errors.duplicateRelation", { key, documentPath: existing.documentPath }),
       });
     } else {
       knownRelations.set(key, relation);
@@ -239,7 +240,7 @@ function validateRelations(
         code: "RELATION_ENDPOINT_MISSING",
         document: relation.documentPath,
         subject: key,
-        message: `Relation '${key}' references missing node '${endpoint}'`,
+        message: t("errors.missingRelationNode", { key, endpoint }),
       });
     }
     if (from && to && !relationKindsMatch(relation.type, from.kind, to.kind)) {
@@ -247,7 +248,7 @@ function validateRelations(
         code: "RELATION_KIND_MISMATCH",
         document: relation.documentPath,
         subject: key,
-        message: `Relation '${key}' cannot connect ${from.kind} to ${to.kind}`,
+        message: t("errors.invalidRelationKinds", { key, fromKind: from.kind, toKind: to.kind }),
       });
     }
   }
@@ -268,7 +269,7 @@ function validateContainment(
         code: "DOMAIN_HAS_PARENT",
         document: relation.documentPath,
         subject: relation.from,
-        message: `Domain '${relation.from}' cannot have a part_of parent`,
+        message: t("errors.domainParent", { from: relation.from }),
       });
     }
     const existingParent = parentByChild.get(relation.from);
@@ -277,7 +278,7 @@ function validateContainment(
         code: "MULTIPLE_CONTAINMENT_PARENTS",
         document: relation.documentPath,
         subject: relation.from,
-        message: `Node '${relation.from}' has parents '${existingParent}' and '${relation.to}'`,
+        message: t("errors.multipleParents", { from: relation.from, existingParent, to: relation.to }),
       });
     } else if (!existingParent) {
       parentByChild.set(relation.from, relation.to);
@@ -317,7 +318,7 @@ function findContainmentCycles(
           code: "CONTAINMENT_CYCLE",
           ...(documentPath ? { document: documentPath } : {}),
           subject: cycleKey,
-          message: `Containment cycle: ${cycle.join(" -> ")}`,
+          message: t("errors.containmentCycle", { cycle: cycle.join(" -> ") }),
         });
       }
       return;

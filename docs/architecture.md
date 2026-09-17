@@ -226,6 +226,45 @@ Owns argument parsing, exit status, machine-readable envelopes, and concise
 human presentation. It composes application services and performs no graph
 interpretation of its own.
 
+### Internationalization
+
+`src/i18n/` owns locale normalization and i18next integration. The CLI normally
+uses the first nonempty system variable in `LC_ALL`, `LC_MESSAGES`, and `LANG`.
+`SEMANTIC_ATLAS_LANG` is an optional debugging and testing override of that
+selection, rather than a normal setup requirement. Locale matching ignores case,
+accepts underscores and POSIX encoding or modifier suffixes, and maps `zh`,
+`zh-CN`, `zh-SG`, and `zh-Hans` (including script-region variants) to Simplified
+Chinese. Missing or unsupported system settings select English.
+
+The Viewer uses `i18next-browser-languagedetector` with only its `navigator`
+detector enabled. Browser language preferences select the first supported
+language; the fallback is English. Traditional Chinese locales are unsupported.
+Detection does not persist a language preference, so opening the same export
+in another browser follows that browser's preferences. Server environment
+variables determine CLI diagnostics only.
+
+Independent catalogs under `src/i18n/locales/en/` and
+`src/i18n/locales/zh-CN/` group CLI, diagnostics, and Viewer messages. i18next
+owns resource lookup, interpolation, and English fallback. Node instances are
+isolated by locale; Zod uses its official locale error maps per parse. External
+parser, operating-system, and npm diagnostics retain their original details.
+HTML adapters escape translated output at the rendering boundary.
+
+The Viewer embeds its resources, i18next runtime, and browser language detector
+in the self-contained page. Server-rendered markup uses deterministic English
+fallback text with translation bindings. The browser translates product-owned
+text and attributes on startup and after each lazy project load, before measuring
+the diagram. User-authored content remains outside those bindings. Safe project
+error responses include a translation key for the browser to render in its own
+language. The JSON model escapes script delimiters before embedding resources.
+
+To add a language, create its catalogs using the same keys and interpolation
+names, register its resources in `src/i18n/index.ts` and aliases in
+`src/i18n/locale.ts`, extend the Viewer's supported languages, and add the
+corresponding Zod locale. The internationalization tests check catalog parity
+and public language behavior. Runtime language scope is owned by the
+[product contract](product-contract.md#runtime-language).
+
 ### Business Understanding Agent Skill
 
 Owns the business-understanding workflow for every business-changing task. It

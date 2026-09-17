@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import type {
   BusinessFlow,
   BusinessNode,
@@ -122,7 +123,7 @@ export class BusinessGraph {
 
   public requireNode(nodeId: string): BusinessNode {
     const node = this.nodeById.get(nodeId);
-    if (!node) throw new Error(`Validated graph is missing node '${nodeId}'`);
+    if (!node) throw new Error(t("errors.graphMissingNode", { nodeId }));
     return node;
   }
 }

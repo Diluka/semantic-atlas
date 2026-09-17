@@ -1,3 +1,4 @@
+import { t, validationOptions } from "../i18n/index.js";
 import type { ZodIssue } from "zod";
 import {
   maintenanceObservationInputSchema,
@@ -33,7 +34,7 @@ export class ObservationInputError extends Error {
 
 export class TaskObservationNotFoundError extends Error {
   public constructor(public readonly taskObservationId: string) {
-    super(`Task observation '${taskObservationId}' does not exist in this repository`);
+    super(t("errors.taskNotFound", { taskObservationId }));
     this.name = "TaskObservationNotFoundError";
   }
 }
@@ -59,16 +60,16 @@ export class ObservationApplication {
     repositoryPath: string,
     input: unknown,
   ): Promise<ObservationWriteResult> {
-    const parsedInput = taskObservationInputSchema.safeParse(input);
+    const parsedInput = taskObservationInputSchema.safeParse(input, validationOptions());
     if (!parsedInput.success) {
-      throw inputError("Task observation input is invalid", parsedInput.error.issues);
+      throw inputError(t("errors.invalidTask"), parsedInput.error.issues);
     }
 
     const repository = (await this.repositoryResolver.resolve(repositoryPath)).identity;
     const observation = taskObservationSchema.parse({
       ...parsedInput.data,
       repository,
-    }) satisfies TaskObservation;
+    }, validationOptions()) satisfies TaskObservation;
     return this.store.writeTask(observation);
   }
 
@@ -76,9 +77,9 @@ export class ObservationApplication {
     repositoryPath: string,
     input: unknown,
   ): Promise<ObservationWriteResult> {
-    const parsedInput = reviewObservationInputSchema.safeParse(input);
+    const parsedInput = reviewObservationInputSchema.safeParse(input, validationOptions());
     if (!parsedInput.success) {
-      throw inputError("Review observation input is invalid", parsedInput.error.issues);
+      throw inputError(t("errors.invalidReview"), parsedInput.error.issues);
     }
 
     const repository = (await this.repositoryResolver.resolve(repositoryPath)).identity;
@@ -93,7 +94,7 @@ export class ObservationApplication {
     const observation = reviewObservationSchema.parse({
       ...parsedInput.data,
       repository,
-    }) satisfies ReviewObservation;
+    }, validationOptions()) satisfies ReviewObservation;
     return this.store.writeReview(observation);
   }
 
@@ -101,9 +102,9 @@ export class ObservationApplication {
     repositoryPath: string,
     input: unknown,
   ): Promise<ObservationWriteResult> {
-    const parsedInput = maintenanceObservationInputSchema.safeParse(input);
+    const parsedInput = maintenanceObservationInputSchema.safeParse(input, validationOptions());
     if (!parsedInput.success) {
-      throw inputError("Maintenance observation input is invalid", parsedInput.error.issues);
+      throw inputError(t("errors.invalidMaintenance"), parsedInput.error.issues);
     }
 
     const repository = (await this.repositoryResolver.resolve(repositoryPath)).identity;
@@ -113,14 +114,14 @@ export class ObservationApplication {
       const candidate = taskObservation?.mapUpdateCandidates[candidateIndex];
       if (!candidate) {
         throw new MaintenanceCandidateError(
-          `Candidate '${taskObservationId}:${candidateIndex}' does not exist in this repository`,
+          t("errors.candidateNotFound", { taskObservationId, candidateIndex }),
           taskObservationId,
           candidateIndex,
         );
       }
       if (candidate.businessDomainId !== parsedInput.data.businessDomainId) {
         throw new MaintenanceCandidateError(
-          `Candidate '${taskObservationId}:${candidateIndex}' belongs to business domain '${candidate.businessDomainId}'`,
+          t("errors.candidateDomain", { taskObservationId, candidateIndex, businessDomainId: candidate.businessDomainId }),
           taskObservationId,
           candidateIndex,
         );
@@ -130,7 +131,7 @@ export class ObservationApplication {
     const observation = maintenanceObservationSchema.parse({
       ...parsedInput.data,
       repository,
-    }) satisfies MaintenanceObservation;
+    }, validationOptions()) satisfies MaintenanceObservation;
     return this.store.writeMaintenance(observation);
   }
 }

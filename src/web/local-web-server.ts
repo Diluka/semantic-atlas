@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { createServer, type ServerResponse } from "node:http";
 import type { LocalWebApplication } from "./local-web-application.js";
 
@@ -37,7 +38,7 @@ export async function startLocalWebServer(
   const address = server.address();
   if (!address || typeof address === "string") {
     await closeServer(server);
-    throw new Error("Could not resolve the local Web server address");
+    throw new Error(t("errors.webAddress"));
   }
 
   return {
@@ -62,7 +63,7 @@ async function routeRequest(
       Allow: "GET, HEAD",
       "Content-Type": "text/plain; charset=utf-8",
     });
-    response.end("Method not allowed\n");
+    response.end(t("errors.methodNotAllowed"));
     return;
   }
 
@@ -80,14 +81,15 @@ async function routeRequest(
         ok: false,
         error: {
           code: "PROJECT_UNAVAILABLE",
-          message: "This project's business map could not be loaded.",
+          message: t("errors.projectMapUnavailable"),
+          messageKey: "errors.projectMapUnavailable",
         },
       });
     }
     return;
   }
   if (pathname !== "/") {
-    sendResponse(response, method, 404, "text/plain; charset=utf-8", "Not found\n");
+    sendResponse(response, method, 404, "text/plain; charset=utf-8", t("errors.httpNotFound"));
     return;
   }
 
@@ -125,7 +127,7 @@ async function sendProject(
     sendJson(response, method, 404, {
       schemaVersion: 1,
       ok: false,
-      error: { code: "PROJECT_NOT_FOUND", message: "Project was not found." },
+      error: { code: "PROJECT_NOT_FOUND", message: t("errors.projectNotFound"), messageKey: "errors.projectNotFound" },
     });
     return;
   }
@@ -133,7 +135,7 @@ async function sendProject(
     sendJson(response, method, 422, {
       schemaVersion: 1,
       ok: false,
-      error: { code: "PROJECT_UNAVAILABLE", message: result.message },
+      error: { code: "PROJECT_UNAVAILABLE", message: result.message, messageKey: result.messageKey },
     });
     return;
   }

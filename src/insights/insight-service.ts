@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import type {
   EvidenceDisposition,
   ReviewObservation,
@@ -22,7 +23,7 @@ const durationMilliseconds = {
 
 export class InvalidInsightPeriodError extends Error {
   public constructor(public readonly period: string) {
-    super(`Insights period '${period}' must use a positive number followed by h, d, or w`);
+    super(t("errors.insightPeriod", { period }));
     this.name = "InvalidInsightPeriodError";
   }
 }

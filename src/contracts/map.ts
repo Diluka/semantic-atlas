@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import { z } from "zod";
 
 export const businessNodeKinds = [
@@ -37,7 +38,7 @@ export const businessFlowStepKinds = [
 const nonEmptyStringSchema = z.string().trim().min(1);
 const businessIdSchema = nonEmptyStringSchema.regex(
   /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/,
-  "IDs use lowercase dot-separated business vocabulary with optional hyphens",
+  { error: () => t("errors.businessId") },
 );
 
 export const navigationAnchorSchema = z.object({

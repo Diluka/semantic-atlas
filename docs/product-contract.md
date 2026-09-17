@@ -89,6 +89,21 @@ its currently displayed translations. Image bounds come from the complete
 layout rather than the visible viewport or zoom. Generation stays in the
 browser and works in both the self-contained HTML and local Web Viewer.
 
+### Runtime language
+
+Product-owned text supports English and Simplified Chinese, with English as
+the fallback. CLI help and diagnostics follow the system's language environment.
+The shared Viewer follows the browser's language preferences when the page opens,
+for both exported HTML and local Web sessions. Its controls, diagram type labels,
+project states, accessibility text, and PNG feedback share that browser language.
+The same exported file can therefore serve browsers with different preferences.
+User-authored map names, summaries, aliases, and branch labels retain their
+original content; machine-readable keys, IDs, error codes, and enum values remain
+stable.
+
+Language configuration and translation maintenance are defined in
+[Internationalization](architecture.md#internationalization).
+
 ### Post-task maintenance decision and reconciliation
 
 Every business-changing task records its map outcome and decides whether stable

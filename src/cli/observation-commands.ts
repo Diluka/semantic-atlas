@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import type {
   CliError,
   CliErrorEnvelope,
@@ -114,7 +115,7 @@ async function readObservationInput(
     return JSON.parse(input) as unknown;
   } catch {
     throw new ObservationInputError(
-      "Observation stdin must contain one complete JSON object",
+      t("cli.observationInput"),
     );
   }
 }
@@ -201,5 +202,5 @@ function repositoryOrStorageError(
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected observation failure";
+  return error instanceof Error ? error.message : t("cli.observationFailure");
 }

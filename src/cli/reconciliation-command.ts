@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.js";
 import type {
   ReconciliationCandidatesEnvelope,
   ReconciliationStatusEnvelope,
@@ -70,5 +71,5 @@ function reconciliationError(error: unknown) {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected reconciliation failure";
+  return error instanceof Error ? error.message : t("cli.reconciliationFailure");
 }

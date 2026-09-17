@@ -104,6 +104,11 @@ without exposing code paths in the graph. Click a card, or focus it and press
 `Enter`, to inspect its navigation anchors and related flows in a desktop side
 panel or narrow-screen bottom panel. A related-flow link opens the actual flow.
 
+Use `Export PNG` to download the entire selected diagram at high resolution,
+independent of the current zoom. The image includes displayed translations and
+works offline in an exported HTML Viewer. Very large diagrams that exceed the
+browser image budget ask you to select a business domain or flow.
+
 `project add [path]` validates the complete business map and saves its
 normalized checkout path in the versioned user-local
 `~/.semantic-atlas/projects.json` file. Omitting `path` uses the current

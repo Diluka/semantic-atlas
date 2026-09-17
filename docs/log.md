@@ -1,5 +1,12 @@
 # Documentation Log
 
+## 2026-09-17
+
+- Prepared `semantic-atlas@2.4.0` with complete-diagram image export.
+- Added complete-diagram PNG export to the shared Web and offline Viewer,
+  preserving translated text and full layout independently of the camera.
+- Documented browser-local snapshot ownership, cleanup, and image-size limits.
+
 ## 2026-09-16
 
 - Prepared `semantic-atlas@2.3.1` with translation-aware diagram layout and

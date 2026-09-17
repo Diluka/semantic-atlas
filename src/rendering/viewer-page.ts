@@ -167,10 +167,15 @@ function renderViewerShell(
           <button type="button" data-action="fit" aria-label="Fit map to window">Fit</button>
           <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
         </div>
+        <button type="button" class="export-image" data-action="export-image" title="Download the complete diagram as a high-resolution PNG" disabled>
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2v10m-4-4 4 4 4-4M3 13v4h14v-4" /></svg>
+          <span>Export PNG</span>
+        </button>
       </div>
     </header>
     <section id="map-viewport" class="map-viewport" aria-label="Interactive business map">
       <div id="project-view-host" class="project-view-host">${initialMarkup}</div>
+      <p id="export-status" class="export-status" role="status" aria-live="polite" hidden></p>
       <section id="viewer-status" class="viewer-status" role="status" aria-live="polite" ${displayedProjects.length > 0 ? "hidden" : ""}>
         <div class="viewer-status__panel">
           <p id="viewer-status-eyebrow" class="viewer-status__eyebrow">Project catalog</p>
@@ -411,10 +416,45 @@ function viewerStyles(): string {
     }
     .camera-controls button:last-child { border-right: 0; }
     .camera-controls button:hover { background: #f4ead2; }
-    .camera-controls button:focus-visible, .view-switch button:focus-visible, select:focus-visible, summary:focus-visible {
+    .camera-controls button:focus-visible, .view-switch button:focus-visible, .export-image:focus-visible, select:focus-visible, summary:focus-visible {
       outline: 3px solid rgba(217, 164, 65, 0.42);
       outline-offset: 2px;
     }
+    .export-image {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--ink);
+      border-radius: 7px;
+      color: var(--surface-strong);
+      background: var(--ink);
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .export-image:hover { background: #385052; }
+    .export-image:disabled { opacity: 0.5; cursor: default; }
+    .export-status {
+      position: absolute;
+      z-index: 2;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: calc(100% - 32px);
+      margin: 0;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      box-shadow: 0 8px 24px rgba(29, 42, 43, 0.12);
+      font-size: 12px;
+      text-align: center;
+      cursor: default;
+    }
+    .export-status[hidden] { display: none; }
     .map-viewport {
       grid-row: 2;
       grid-column: 1;

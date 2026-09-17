@@ -35,6 +35,7 @@ describe("Semantic Atlas local Web server", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'");
+    expect(response.headers.get("content-security-policy")).toContain("img-src data:;");
     expect(model).toMatchObject({
       schemaVersion: 1,
       mode: "web",

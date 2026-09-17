@@ -84,6 +84,11 @@ When a translator appends Chinese alongside English, cards grow to show the
 complete content and the diagram rearranges nodes, labels, and connecting lines.
 The original tracked map remains the single business-knowledge source.
 
+`Export PNG` saves the entire selected relationship diagram or flow, including
+its currently displayed translations. Image bounds come from the complete
+layout rather than the visible viewport or zoom. Generation stays in the
+browser and works in both the self-contained HTML and local Web Viewer.
+
 ### Post-task maintenance decision and reconciliation
 
 Every business-changing task records its map outcome and decides whether stable

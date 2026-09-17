@@ -173,8 +173,20 @@ camera follows content reflow; an explicitly zoomed or panned camera keeps its
 current view. Its browser interaction state is disposable and never
 enters tracked map data.
 
+`renderDiagramImage` snapshots the selected diagram after text layout settles,
+resets the snapshot to full layout bounds, and rasterizes its SVG geometry and
+current HTML text through bundled `html-to-image`. SVG paint styles are captured
+explicitly because that library deep-clones SVG without copying descendant
+styles. The off-screen snapshot is removed on success or failure; the live
+camera and translated DOM stay unchanged. Small diagrams use 2× resolution;
+large images stay within 64 million pixels and 16384 pixels per side. Diagrams
+that cannot fit at native text size report a limit and suggest a business-domain
+or flow selection. Export controls prevent duplicate jobs and report completion
+or failure. The Web policy permits generated `data:` images while keeping
+external image sources blocked.
+
 Static export embeds its complete project model, diagram layers, and the bundled
-Dagre browser runtime, with no network dependency. Web mode initially
+Dagre and image-export browser runtimes, with no network dependency. Web mode initially
 receives only project IDs and display names, then replaces its single current
 model and SVG set when a selection loads. Empty, loading, ready, and unavailable
 states are browser-session state. A monotonically increasing request generation

@@ -17,11 +17,15 @@ import { createRequire } from "node:module";
 import { layoutDiagram, type DiagramLayoutSpec } from "./viewer-layout.js";
 import { createDiagramLayoutController } from "./viewer-diagram.js";
 import type dagre from "@dagrejs/dagre";
+import type * as htmlToImage from "html-to-image";
+import { planDiagramImage, renderDiagramImage } from "./diagram-image.js";
 
 const require = createRequire(import.meta.url);
 const dagreLicense = readFileSync(require.resolve("@dagrejs/dagre/LICENSE"), "utf8");
 const dagreBrowserScript = `/*! @dagrejs/dagre and @dagrejs/graphlib (MIT)\n${dagreLicense}*/\n`
   + readFileSync(require.resolve("@dagrejs/dagre/dist/dagre.min.js"), "utf8");
+const imageBrowserScript = `/*! html-to-image (MIT)\n${readFileSync(require.resolve("html-to-image/LICENSE"), "utf8")}*/\n`
+  + readFileSync(require.resolve("html-to-image/dist/html-to-image.js"), "utf8");
 
 interface ViewerNavigationAnchorModel {
   readonly kind: string;
@@ -96,6 +100,7 @@ interface WebProjectEnvelope {
 export function renderViewerBrowserScript(): string {
   return [
     dagreBrowserScript,
+    imageBrowserScript,
     `const MAP_SCALE_LIMITS = ${JSON.stringify(MAP_SCALE_LIMITS)};`,
     clamp.toString(),
     viewportScale.toString(),
@@ -107,6 +112,9 @@ export function renderViewerBrowserScript(): string {
     createLatestProjectLoader.toString(),
     layoutDiagram.toString(),
     createDiagramLayoutController.toString(),
+    planDiagramImage.toString(),
+    renderDiagramImage.toString(),
+    "globalThis.__semanticAtlasDiagramImage = { planDiagramImage, renderDiagramImage };",
     "globalThis.__semanticAtlasCamera = { fitViewBox, zoomViewBoxAt, mapPointFromViewport, mapPointToViewport, viewportScale, panViewBox };",
     "globalThis.__semanticAtlasCreateLatestProjectLoader = createLatestProjectLoader;",
     "globalThis.__semanticAtlasLayoutDiagram = layoutDiagram;",
@@ -148,6 +156,11 @@ type ViewerViewType = "relationships" | "flows";
 function viewerBrowserEntry(): void {
   const browserGlobal = globalThis as typeof globalThis & {
     readonly dagre: typeof dagre;
+    readonly htmlToImage: typeof htmlToImage;
+    readonly __semanticAtlasDiagramImage: {
+      planDiagramImage: typeof planDiagramImage;
+      renderDiagramImage: typeof renderDiagramImage;
+    };
     readonly __semanticAtlasLayoutDiagram: typeof layoutDiagram;
     readonly __semanticAtlasCreateDiagramLayoutController: typeof createDiagramLayoutController;
     readonly __semanticAtlasCamera: BrowserCameraApi;
@@ -183,6 +196,8 @@ function viewerBrowserEntry(): void {
   const detailsAnchors = document.querySelector<HTMLElement>("#node-details-anchors");
   const detailsAnchorList = document.querySelector<HTMLElement>("#node-details-anchor-list");
   const detailsClose = document.querySelector<HTMLButtonElement>('[data-action="close-details"]');
+  const exportButton = document.querySelector<HTMLButtonElement>('[data-action="export-image"]');
+  const exportStatus = document.querySelector<HTMLElement>("#export-status");
   if (
     !modelElement
     || !projectSelect
@@ -208,6 +223,8 @@ function viewerBrowserEntry(): void {
     || !detailsAnchors
     || !detailsAnchorList
     || !detailsClose
+    || !exportButton
+    || !exportStatus
   ) return;
 
   const model = JSON.parse(modelElement.textContent ?? "{}") as ViewerModel;
@@ -219,6 +236,7 @@ function viewerBrowserEntry(): void {
   let activeViewType: ViewerViewType = "relationships";
   let activeNodeElement: SVGGElement | undefined;
   let dragState: MapDragState | undefined;
+  let exporting = false;
 
   const currentProject = (): ViewerProjectModel | undefined =>
     activeProject?.id === activeProjectId ? activeProject : undefined;
@@ -290,6 +308,7 @@ function viewerBrowserEntry(): void {
     flowSelect.disabled = !enabled;
     for (const button of viewTypeButtons) button.disabled = !enabled;
     for (const button of cameraButtons) button.disabled = !enabled;
+    exportButton.disabled = !enabled || exporting;
   };
 
   const showStatus = (eyebrow: string, title: string, message: string): void => {
@@ -433,6 +452,7 @@ function viewerBrowserEntry(): void {
   };
 
   const activateView = (): void => {
+    if (!exporting) exportStatus.hidden = true;
     for (const view of mapViews()) {
       const active = view.dataset.projectId === activeProjectId
         && view.dataset.viewType === activeViewType
@@ -458,6 +478,7 @@ function viewerBrowserEntry(): void {
         ? `${flow.stepCount} steps / ${flow.transitionCount} transitions / ${flow.scenario.name}`
         : "No business flows";
     const svg = activeSvg();
+    exportButton.disabled = !svg || exporting;
     const definition = activeViewType === "relationships" ? view : flow;
     if (svg && definition) {
       applyCamera(svg, ensureCamera(svg));
@@ -541,6 +562,39 @@ function viewerBrowserEntry(): void {
     const svg = activeSvg();
     if (svg) applyCamera(svg, cameraApi.fitViewBox(mapBounds(svg)));
   };
+
+  const exportImage = async (): Promise<void> => {
+    const svg = activeSvg();
+    const view = svg?.parentElement;
+    if (!view || exporting) return;
+    const diagram = activeViewType === "relationships" ? currentView() : currentFlow();
+    const filename = `${currentProject()?.name ?? "business-map"}-${diagram?.id ?? "all"}`
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/gu, "-");
+    exporting = true;
+    exportButton.disabled = true;
+    exportButton.setAttribute("aria-busy", "true");
+    exportStatus.hidden = false;
+    exportStatus.textContent = "Preparing full diagram PNG…";
+    try {
+      const imageApi = browserGlobal.__semanticAtlasDiagramImage;
+      const image = await imageApi.renderDiagramImage(view, browserGlobal.htmlToImage.toBlob, imageApi.planDiagramImage);
+      const url = URL.createObjectURL(image.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${filename}.png`;
+      link.click();
+      // 下载在浏览器中异步开始，保留 URL 到下载接管之后。
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      exportStatus.textContent = `PNG ready · ${image.width} × ${image.height} pixels`;
+    } catch (error) {
+      exportStatus.textContent = error instanceof Error ? error.message : "The image could not be exported. Please try again.";
+    } finally {
+      exporting = false;
+      exportButton.removeAttribute("aria-busy");
+      exportButton.disabled = !activeSvg();
+    }
+  };
+  exportButton.addEventListener("click", () => { void exportImage(); });
 
   new ResizeObserver(() => {
     const svg = activeSvg();

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runInNewContext } from "node:vm";
 import { renderViewerBrowserScript } from "../../src/rendering/viewer-browser.js";
 import {
   renderViewerPage,
@@ -7,6 +8,25 @@ import {
 } from "../../src/rendering/viewer-page.js";
 
 describe("ViewerPage", () => {
+  it("embeds the PNG exporter in both offline and Web Viewers without a network loader", () => {
+    for (const html of [renderViewerPage([viewerProject("project", "repository")]), renderWebViewerPage([])]) {
+      expect(html).toContain('data-action="export-image"');
+      expect(html).toContain('id="export-status"');
+    }
+    const runtime = {
+      document: { querySelector: () => null, querySelectorAll: () => [] },
+    };
+    const result = runInNewContext(`${renderViewerBrowserScript()}\n({
+      rasterizer: typeof globalThis.htmlToImage.toBlob,
+      renderer: typeof globalThis.__semanticAtlasDiagramImage.renderDiagramImage,
+      plan: globalThis.__semanticAtlasDiagramImage.planDiagramImage({width: 960, height: 1504})
+    })`, runtime);
+    expect(JSON.parse(JSON.stringify(result))).toEqual({
+      rasterizer: "function", renderer: "function",
+      plan: { width: 960, height: 1504, pixelWidth: 1920, pixelHeight: 3008 },
+    });
+  });
+
   it("disambiguates duplicate project names without exposing repository paths", () => {
     const html = renderWebViewerPage([
       viewerProject("first", "repository"),
